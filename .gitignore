@@ -10,3 +10,8 @@ wheels/
 .venv/
 docs/
 models/
+data/
+.env
+outputs/*
+runs/
+!outputs/loss_curve.png

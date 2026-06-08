@@ -1,3 +1,7 @@
 !.venv/
 !docs/
 !models/
+!data/
+!.env
+!outputs/
+!runs/

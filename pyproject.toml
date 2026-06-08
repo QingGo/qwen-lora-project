@@ -1,15 +1,79 @@
 [project]
 name = "qwen-lora-project"
 version = "0.1.0"
-description = "Add your description here"
+description = "Qwen2.5-7B LoRA fine-tuning, quantization, and function calling"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "torch>=2.12.0",
-    "torchaudio>=2.11.0",
-    "torchvision>=0.27.0",
+    # --- PyTorch (CUDA 版本需手动安装，见下方说明) ---
+    "torch>=2.4.0",
+    "torchvision>=0.19.0",
+    "torchaudio>=2.4.0",
+    # --- 训练核心 ---
+    "transformers>=4.44.0",
+    "accelerate>=0.30.0",
+    "datasets>=2.20.0",
+    "peft>=0.12.0",
+    "trl>=0.9.0",
+    "deepspeed>=0.14.0",
+    # --- 量化与推理 ---
+    "huggingface-hub>=0.23.0",
+    "llama-cpp-python>=0.2.90",
+    # --- 工具 (TensorBoard, vLLM, 模型下载等) ---
+    "tensorboard>=2.16.0",
+    "matplotlib>=3.8.0",
+    "vllm>=0.5.0",
+    "modelscope>=1.16.0",
+    "openai>=1.30.0",
+    "pandas>=2.1.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.5.0",
+]
+
+# ==================== 镜像源 ====================
 [[tool.uv.index]]
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+# PyTorch 从 CUDA 源安装
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+
+# ==================== Ruff 配置 ====================
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501", # line-too-long (handled by formatter)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["qwen_lora_project"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
