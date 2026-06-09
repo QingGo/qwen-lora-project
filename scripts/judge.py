@@ -2,7 +2,9 @@ import argparse
 import json
 import os
 import random
+import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -81,7 +83,7 @@ JUDGE_SYSTEM = """你是一个专业的AI回答质量评估专家。你会收到
 }"""
 
 
-def generate(model, tokenizer, prompt: str, max_new_tokens: int = 256) -> str:
+def generate(model, tokenizer, prompt: str, max_new_tokens: int = 1024) -> str:
     messages = [{"role": "user", "content": prompt}]
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to(model.device)
@@ -148,10 +150,11 @@ def main():
     parser.add_argument("--model_path", default="./models/Qwen2.5-7B-Instruct")
     parser.add_argument("--adapter_path", default="./outputs/qwen2.5-7b-lora-adapter")
     parser.add_argument("--judge_model", default="deepseek-v4-flash")
-    parser.add_argument("--max_new_tokens", type=int, default=512)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num_passes", type=int, default=2, help="Number of judge passes per question for stability")
+    parser.add_argument("--num_questions", type=int, default=20, help="Number of questions to evaluate (from validation data)")
     parser.add_argument("--val_data", default="./data/val.jsonl", help="Validation data for test questions")
+    parser.add_argument("--baseline_name", default=None, help="Save result as a named baseline (e.g. 'baseline-v1', 'lr-5e-5')")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -177,7 +180,8 @@ def main():
                         val_questions.append(q)
                     break
         if val_questions:
-            test_questions = val_questions[:20]  # use up to 20 from val set
+            random.shuffle(val_questions)
+            test_questions = val_questions[:args.num_questions]
             print(f"Using {len(test_questions)} questions from validation data")
     else:
         print(f"Validation data not found, using {len(test_questions)} default questions")
@@ -194,15 +198,15 @@ def main():
     )
     model = PeftModel.from_pretrained(model, args.adapter_path)
 
-    print(f"\nJudge: {args.judge_model} | Questions: {len(TEST_QUESTIONS)}")
+    print(f"\nJudge: {args.judge_model} | Questions: {len(test_questions)}")
     print("=" * 70)
 
     all_results = []
     scores_base = {k: [] for k in ["helpfulness", "accuracy", "completeness", "structure", "style_alignment"]}
     scores_lora = {k: [] for k in ["helpfulness", "accuracy", "completeness", "structure", "style_alignment"]}
 
-    for i, question in enumerate(TEST_QUESTIONS):
-        print(f"\n[{i + 1}/{len(TEST_QUESTIONS)}] {question}")
+    for i, question in enumerate(test_questions):
+        print(f"\n[{i + 1}/{len(test_questions)}] {question}")
 
         model.disable_adapter_layers()
         base_answer = generate(model, tokenizer, question, max_new_tokens=args.max_new_tokens)
@@ -246,8 +250,8 @@ def main():
 
         all_results.append({
             "question": question,
-            "base_answer_preview": base_answer[:200],
-            "lora_answer_preview": lora_answer[:200],
+            "base_answer": base_answer,
+            "lora_answer": lora_answer,
             "base_is_a": base_is_a,
             "base_scores": base_scores_detail,
             "lora_scores": lora_scores_detail,
@@ -286,6 +290,44 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_results, f, ensure_ascii=False, indent=2)
     print(f"\n详细结果已保存至: {output_file}")
+
+    if args.baseline_name:
+        git_commit = None
+        try:
+            git_commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                text=True, stderr=subprocess.DEVNULL
+            ).strip()
+        except Exception:
+            pass
+
+        baseline = {
+            "name": args.baseline_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "git_commit": git_commit,
+            "num_questions": len(test_questions),
+            "dim_scores": {
+                k: {
+                    "base": round(sum(scores_base[k]) / len(scores_base[k]), 2) if scores_base[k] else 0,
+                    "lora": round(sum(scores_lora[k]) / len(scores_lora[k]), 2) if scores_lora[k] else 0,
+                    "diff": round(
+                        sum(scores_lora[k]) / len(scores_lora[k]) - sum(scores_base[k]) / len(scores_base[k]), 2
+                    ) if scores_lora[k] and scores_base[k] else 0,
+                }
+                for k in scores_base
+            },
+            "total_avg": {
+                "base": round(sum(sum(scores_base[k]) for k in scores_base) / len(scores_base["helpfulness"]), 2) if scores_base["helpfulness"] else 0,
+                "lora": round(sum(sum(scores_lora[k]) for k in scores_lora) / len(scores_lora["helpfulness"]), 2) if scores_lora["helpfulness"] else 0,
+            },
+            "win_counts": {"base": base_win, "lora": winner_count, "tie": tie_count},
+        }
+        baseline["total_avg"]["diff"] = round(baseline["total_avg"]["lora"] - baseline["total_avg"]["base"], 2)
+
+        baseline_file = Path("outputs") / "baselines.jsonl"
+        with open(baseline_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(baseline, ensure_ascii=False) + "\n")
+        print(f"基线已添加至: {baseline_file}")
 
 
 if __name__ == "__main__":

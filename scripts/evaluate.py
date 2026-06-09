@@ -62,7 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description="LoRA 微调效果评测")
     parser.add_argument("--model_path", default="./models/Qwen2.5-7B-Instruct")
     parser.add_argument("--adapter_path", default="./outputs/qwen2.5-7b-lora-adapter")
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     args = parser.parse_args()
 
     print("Loading tokenizer...")
