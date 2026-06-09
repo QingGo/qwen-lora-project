@@ -238,7 +238,7 @@ def main():
             loss_history["eval"].append({"step": entry["step"], "eval_loss": entry["eval_loss"]})
 
     if final_eval_loss is not None:
-        last_step = steps[-1] if (steps := loss_history["train"]) else 0
+        last_step = steps[-1]["step"] if (steps := loss_history["train"]) else 0
         loss_history["eval"].append({"step": last_step + 1, "eval_loss": final_eval_loss})
 
     loss_history_path = os.path.join(args.output_dir, "loss_history.json")

@@ -36,6 +36,23 @@ def main():
         default=42,
         help="Random seed",
     )
+    parser.add_argument(
+        "--min_answer_len",
+        type=int,
+        default=50,
+        help="Filter out answers shorter than this (characters)",
+    )
+    parser.add_argument(
+        "--system_prompt",
+        type=str,
+        default="你是一个乐于助人的AI助手。请使用 Markdown 格式回答：用 **加粗** 突出重点、用 ### 标题分层、用数字或项目符号分点列出内容。回答应当结构清晰、内容详实、易于阅读。",
+        help="System prompt prepended to each conversation",
+    )
+    parser.add_argument(
+        "--no_system_prompt",
+        action="store_true",
+        help="Disable system prompt",
+    )
     args = parser.parse_args()
 
     df = pd.read_csv(args.input)
@@ -56,12 +73,17 @@ def main():
         assistant_content = str(row["output"]).strip()
         if not assistant_content:
             continue
-        records.append({
-            "conversations": [
-                {"role": "user", "content": user_content},
-                {"role": "assistant", "content": assistant_content},
-            ]
-        })
+        if len(assistant_content) < args.min_answer_len:
+            continue
+
+        conversations = [
+            {"role": "user", "content": user_content},
+            {"role": "assistant", "content": assistant_content},
+        ]
+        if not args.no_system_prompt:
+            conversations.insert(0, {"role": "system", "content": args.system_prompt})
+
+        records.append({"conversations": conversations})
 
     random.seed(args.seed)
     random.shuffle(records)
