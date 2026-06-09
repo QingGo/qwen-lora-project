@@ -86,7 +86,7 @@ def generate_replay(
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=512,
+                max_new_tokens=384,
                 do_sample=False,
                 temperature=1.0,
                 pad_token_id=tokenizer.eos_token_id,
@@ -172,7 +172,7 @@ def main():
                 device_map="auto",
                 trust_remote_code=True,
             )
-            replay_raw = generate_replay(model, tokenizer, alpaca_df, n_replay * 2, args.seed)
+            replay_raw = generate_replay(model, tokenizer, alpaca_df, n_replay, args.seed)
 
             if args.replay_file:
                 replay_path = Path(args.replay_file)
