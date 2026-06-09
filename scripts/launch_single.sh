@@ -19,7 +19,7 @@ echo ""
 
 # 预处理数据
 echo "[1/2] 准备数据..."
-$PYTHON scripts/prepare_data.py --num_samples 2000
+$PYTHON scripts/prepare_data.py --num_samples 5000
 echo ""
 
 # 训练 (attention-only LoRA: q_proj,k_proj,v_proj,o_proj -> ~12M params)
@@ -35,8 +35,8 @@ $PYTHON train_qwen_lora.py \
     --lora_target_modules q_proj,k_proj,v_proj,o_proj \
     --batch_size 2 \
     --grad_accum 4 \
-    --num_epochs 2 \
-    --learning_rate 2e-4 \
+    --num_epochs 3 \
+    --learning_rate 5e-5 \
     --max_length 2048 \
     --save_steps 500 \
     "$@"

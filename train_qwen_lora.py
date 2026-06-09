@@ -28,10 +28,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora_dropout", type=float, default=0.05)
     parser.add_argument("--lora_target_modules", default="q_proj,k_proj,v_proj,o_proj")
 
-    parser.add_argument("--num_epochs", type=int, default=2)
+    parser.add_argument("--num_epochs", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--grad_accum", type=int, default=4)
-    parser.add_argument("--learning_rate", type=float, default=2e-4)
+    parser.add_argument("--learning_rate", type=float, default=5e-5)
     parser.add_argument("--max_length", type=int, default=2048)
     parser.add_argument("--warmup_ratio", type=float, default=0.03)
     parser.add_argument("--save_steps", type=int, default=500)

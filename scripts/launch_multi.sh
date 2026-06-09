@@ -39,7 +39,7 @@ deepspeed --num_gpus="$NUM_GPUS" train_qwen_lora.py \
     --batch_size 2 \
     --grad_accum 4 \
     --num_epochs 3 \
-    --learning_rate 2e-4 \
+    --learning_rate 5e-5 \
     --max_length 2048 \
     --save_steps 500 \
     "$@"

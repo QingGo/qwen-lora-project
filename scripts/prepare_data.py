@@ -21,7 +21,7 @@ def main():
     parser.add_argument(
         "--num_samples",
         type=int,
-        default=2000,
+        default=5000,
         help="Number of samples to extract (0 = all)",
     )
     parser.add_argument(
