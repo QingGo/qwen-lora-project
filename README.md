@@ -1,28 +1,32 @@
-# Qwen2.5-7B LoRA Fine-tuning & Evaluation
+# Qwen2.5-7B LoRA Fine-tuning: Instruction & Text2SQL
 
 [中文版](README_CN.md)
 
-LoRA fine-tuning of Qwen2.5-7B-Instruct on Chinese instruction-following data (Alpaca-GPT4-ZH), with LLM-as-Judge evaluation using DeepSeek-v4-flash.
+LoRA fine-tuning of Qwen2.5-7B-Instruct on Chinese instruction-following data and the SQaLe Text-to-SQL dataset, with LLM-as-Judge evaluation using DeepSeek-v4-flash and SQLite execution validation.
 
 ## Architecture
 
 ```mermaid
 graph TD
     subgraph Data["Data Pipeline"]
-        CSV["alpaca-gpt4-data-zh<br/>train.csv (48K rows)"] -->|prepare_data.py| JSONL["train.jsonl + val.jsonl<br/>(2K samples)"]
+        CSV["alpaca-gpt4-data-zh<br/>48K rows"] -->|prepare_data.py| JSONL1["train.jsonl + val.jsonl"]
+        BELLE["belle-0.5M<br/>519K Chinese instructions"] -->|prepare_mixed_data.py| JSONL1
+        SQaLe["SQaLe Text-to-SQL<br/>511K (schema, question, SQL)"] -->|prepare_text2sql_data.py| JSONL2["train.jsonl + val.jsonl<br/>(3K + 300)"]
     end
 
     subgraph Training["Training"]
-        JSONL -->|Qwen2.5 chat template| Tok["Tokenized Dataset"]
+        JSONL1 & JSONL2 -->|Qwen2.5 chat template| Tok["Tokenized Dataset"]
         Tok -->|LoRA adapter| Train["train_qwen_lora.py<br/>Single GPU / DeepSpeed"]
-        Train --> Output["outputs/<br/>├── loss_history.json<br/>├── loss_curve.png<br/>├── qwen2.5-7b-lora-adapter/<br/>└── qwen2.5-7b-lora-output/"]
+        Train --> Output["outputs/<br/>├── loss_history.json<br/>├── loss_curve.png<br/>├── baselines.jsonl<br/>├── qwen2.5-7b-lora-adapter/<br/>└── qwen2.5-7b-lora-output/"]
     end
 
     subgraph Eval["Evaluation"]
         Base["Base Model<br/>Qwen2.5-7B-Instruct"] --> Gen["Generate answers"]
         Lora["LoRA Model<br/>+ adapter"] --> Gen
         Gen --> Judge["LLM Judge<br/>(DeepSeek-v4-flash)"]
-        Judge --> Report["outputs/judge_results.json<br/>5-dim × 7 questions"]
+        Judge --> Report["outputs/judge_results.json<br/>5-dim scoring"]
+        Gen --> SQLite["SQLite Execution<br/>(Text2SQL only)"]
+        SQLite --> Report2["outputs/text2sql_eval.json<br/>3-dim + exec rate"]
     end
 
     subgraph Config["Configurations"]
@@ -38,25 +42,37 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant User
-    participant Script as launch_single.sh
-    participant Prep as prepare_data.py
+    participant Prep as prepare_*.py
     participant Train as train_qwen_lora.py
-    participant Judge as judge.py (DeepSeek API)
+    participant Eval as eval_*.py / judge.py
+    participant Judge as DeepSeek-v4-flash
+    participant SQLite as SQLite :memory:
 
-    User->>Script: bash scripts/launch_single.sh
-    Script->>Prep: python scripts/prepare_data.py --num_samples 2000
-    Prep-->>Script: train.jsonl (1800) + val.jsonl (200)
-    Script->>Train: python train_qwen_lora.py
-    Train->>Train: Pre-training eval (step 0)
-    Train->>Train: Train 450 steps / 2 epochs
-    Train->>Train: Post-training eval
-    Train-->>Script: loss_history.json + adapter
-    User->>Judge: python scripts/judge.py
-    Judge->>Judge: Generate base+LoRA answers
-    Judge->>Judge: Randomize A/B order
-    Judge->>+DeepSeek: Rate 5 dimensions per question
-    DeepSeek-->>-Judge: JSON scores
-    Judge-->>User: judge_results.json + summary
+    User->>Prep: python scripts/prepare_data.py<br/>python scripts/prepare_mixed_data.py<br/>python scripts/prepare_text2sql_data.py
+    Prep-->>User: train.jsonl + val.jsonl
+
+    User->>Train: python train_qwen_lora.py
+    Train->>Train: Pre-training evaluation (step 0)
+    Train->>Train: Training loops (with eval_steps=30)
+    Train->>Train: Post-training evaluation
+    Train-->>User: LoRA adapter + loss_history.json
+
+    alt Instruction Fine-tuning
+        User->>Eval: python scripts/judge.py
+        Eval->>Eval: Generate base + LoRA answers
+        Eval->>Eval: Randomize A/B order
+        Eval->>+Judge: Score 5 dimensions per question
+        Judge-->>-Eval: JSON scores
+        Eval-->>User: judge_results.json + summary
+    else Text-to-SQL
+        User->>Eval: python scripts/eval_text2sql.py
+        Eval->>Eval: Generate SQL (base vs LoRA)
+        Eval->>+SQLite: Execute SQL against schema
+        SQLite-->>-Eval: Valid / Error
+        Eval->>+Judge: Score 3 dimensions
+        Judge-->>-Eval: JSON scores
+        Eval-->>User: text2sql_eval.json + exec rates
+    end
 ```
 
 ## Project Structure
@@ -64,192 +80,239 @@ sequenceDiagram
 ```
 qwen-lora-project/
 ├── configs/
-│   ├── ds_zero2.json              # DeepSpeed ZeRO-2 config
-│   └── ds_zero3.json              # DeepSpeed ZeRO-3 config
+│   ├── ds_zero2.json
+│   └── ds_zero3.json
 ├── scripts/
-│   ├── prepare_data.py            # CSV → conversations JSONL
+│   ├── prepare_data.py            # Alpaca CSV → conversations JSONL
+│   ├── prepare_mixed_data.py      # Alpaca + BELLE + replay buffer mixing
+│   ├── prepare_text2sql_data.py   # SQaLe filtering → conversations JSONL
 │   ├── launch_single.sh           # Single GPU training
 │   ├── launch_multi.sh            # Multi-GPU DeepSpeed training
 │   ├── evaluate.py                # Qualitative base vs LoRA comparison
-│   ├── judge.py                   # DeepSeek LLM-as-Judge evaluation
+│   ├── judge.py                   # DeepSeek LLM-as-Judge (5-dim)
+│   ├── eval_text2sql.py           # Text2SQL eval (SQLite exec + Judge)
 │   └── plot_loss.py               # Loss curve plotting
 ├── train_qwen_lora.py             # Unified training script
-├── models/
-│   └── Qwen2.5-7B-Instruct/      # Base model (~15 GB)
+├── models/Qwen2.5-7B-Instruct/
 ├── data/
-│   ├── alpaca-gpt4-data-zh/      # Raw Alpaca-GPT4-ZH dataset
-│   ├── train.jsonl                # Training conversations
-│   └── val.jsonl                  # Validation conversations
+│   ├── alpaca-gpt4-data-zh/       # Raw Alpaca-GPT4-ZH CSV
+│   ├── belle-0.5M/                # BELLE Chinese instruction data
+│   ├── sqale/                     # SQaLe Text2SQL (HF cache)
+│   ├── train.jsonl
+│   ├── val.jsonl
+│   └── replay_buffer.jsonl        # Qwen base replay answers
 ├── outputs/
-│   ├── loss_history.json          # All loss data (JSON)
-│   ├── loss_curve.png             # Loss plot
-│   ├── qwen2.5-7b-lora-adapter/  # LoRA weights (~50 MB)
-│   ├── qwen2.5-7b-lora-output/   # Training checkpoints
-│   └── judge_results.json         # Judge evaluation results
+│   ├── baselines.jsonl            # All experiment records
+│   ├── judge_results.json         # Latest instruction judge results
+│   ├── text2sql_eval.json         # Text2SQL evaluation results
+│   ├── loss_history.json
+│   ├── loss_curve.png
+│   ├── qwen2.5-7b-lora-adapter/
+│   └── qwen2.5-7b-lora-output/
 └── pyproject.toml
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
 uv sync
 
-# 2. Prepare data + train (single GPU)
-bash scripts/launch_single.sh
+# === Instruction Fine-tuning ===
+python scripts/prepare_data.py --num_samples 5000
+python train_qwen_lora.py --data_path ./data/train.jsonl
+python scripts/judge.py --num_questions 20 --baseline_name my-experiment
 
-# 3. Evaluate with LLM Judge
-python scripts/judge.py
+# === Mixed Data Training (best results) ===
+python scripts/prepare_mixed_data.py --total_samples 3000
+python train_qwen_lora.py --data_path ./data/train.jsonl --lora_rank 16 --lora_alpha 32 --lora_target_modules q_proj,k_proj,v_proj,o_proj --learning_rate 2e-4
+python scripts/judge.py --num_questions 20
 
-# 4. Plot loss curves
-python scripts/plot_loss.py
+# === Text-to-SQL ===
+python scripts/prepare_text2sql_data.py --num_proc 10
+python train_qwen_lora.py --data_path ./data/train.jsonl --max_length 2048 --batch_size 1 --grad_accum 8 --lora_rank 16 --lora_alpha 32 --learning_rate 2e-4
+python scripts/eval_text2sql.py --n_samples 20
 
-# 5. Qualitative comparison (no external API needed)
-python scripts/evaluate.py
-
-# Multi-GPU with DeepSpeed (future):
+# Multi-GPU with DeepSpeed:
 # bash scripts/launch_multi.sh 4 2    # 4 GPUs ZeRO-2
 # bash scripts/launch_multi.sh 4 3    # 4 GPUs ZeRO-3
 ```
 
-## Training Method
+---
 
-| Parameter | Value |
-|-----------|-------|
-| Base Model | Qwen2.5-7B-Instruct |
-| Dataset | Alpaca-GPT4-ZH (Chinese instruction-following) |
-| Training Samples | 2,000 (1,800 train / 200 val) |
-| LoRA Rank | 16 |
-| LoRA Alpha | 32 (scale = 2.0) |
-| Target Modules | q_proj, k_proj, v_proj, o_proj (attention only) |
-| Trainable Params | ~12.5M (0.16% of 7.6B) |
-| Batch Size | 2 per GPU × 4 grad accum = effective 8 |
-| Epochs | 2 |
-| Learning Rate | 2e-4 with cosine schedule |
-| Max Sequence Length | 2048 |
-| Mixed Precision | BF16 |
-| Gradient Checkpointing | Enabled |
-| GPU | Single RTX 4090 (24 GB) |
-| Training Time | ~8 minutes |
+## Part 1: Instruction Fine-tuning (Alpaca-GPT4-ZH)
 
-### Key Design Decisions
+### Training Configuration
 
-- **Attention-only LoRA** (q/k/v/o): reduces trainable params from 40M to ~12.5M, better suited for 2K samples
-- **Validation during training** at --eval_steps=30 intervals, plus mandatory pre/post-training evaluation
-- **Single GPU**: plain `python` launcher (no DeepSpeed needed)
-- **Multi-GPU ready**: pass `--deepspeed_config` to enable ZeRO-2/3 via DeepSpeed launcher
-- **Loss history**: automatically exported to `loss_history.json` for plotting
+| Parameter | Baseline (v1-v5) | Tier 1 (v6) | Text2SQL |
+|-----------|:---:|:---:|:---:|
+| Base Model | Qwen2.5-7B-Instruct | Qwen2.5-7B-Instruct | Qwen2.5-7B-Instruct |
+| LoRA Rank | 16 | 32 | 16 |
+| LoRA Alpha | 32 | 16 | 32 |
+| Target Modules | q, k, v, o | q, k, v, o, gate | q, k, v, o |
+| Batch Size | 2 | 2 | 1 |
+| Grad Accum | 4 | 4 | 8 |
+| Effective Batch | 8 | 8 | 8 |
+| Learning Rate | 2e-4 | 5e-5 | 2e-4 |
+| LR Schedule | cosine | cosine | cosine |
+| Warmup Ratio | 0.03 | 0.03 | 0.03 |
+| Max Length | 2048 | 2048 | 2048 |
+| Epochs | 2 | 3 | 3 |
+| GPU | RTX 4090 (24 GB) | RTX 4090 (24 GB) | RTX 4090 (24 GB) |
 
-## Training Results
+### Baseline Experiments
+
+Six experiments were conducted, evaluated with DeepSeek-v4-flash on 5 dimensions across 20 questions:
+
+| # | Name | Strategy | Samples | Key Changes |
+|---|------|----------|---------|-------------|
+| v1 | raw-baseline | Alpaca only | 2,000 | No system prompt, no filtering |
+| v2 | cleaned-data | Alpaca filtered | 1,494 | Remove answers < 50 chars, Markdown system prompt |
+| v3 | lr-5e-5-5k | Lower LR + more data | 5,000 | LR 5e-5, proved lower LR hurts on small data |
+| v4 | mixed-data | Alpaca 70% + BELLE 20% | 3,000 | Added BELLE-0.5M diversity (best result) |
+| v5 | mixed-replay | v4 + 10% replay buffer | 3,296 | Qwen base answers as replay targets |
+| v6 | tier1-overfit | Rank 32, alpha 16, gate_proj | 3,000 | Few-shot system prompt (negative result) |
+
+### Baseline Results Summary
 
 ```
-Train Loss:  1.97 → 1.28  (45 log points, every 10 steps)
-Eval Loss:   2.43 → 1.27  (17 points, every 30 steps + pre/post)
-Training Time: 8.1 minutes
-Memory Usage:  ~18 GB / 24 GB
+                    v1(raw)  v2(clean) v3(lr5e5) v4(mix) v5(replay) v6(tier1)
+accuracy     Δ       -0.84    -0.56      -0.68    -0.11    -0.26     -0.39
+structure    Δ       -2.00    -1.67      -1.42    -1.26    -1.00     -1.50
+total Δ              -7.00    -6.39      -7.31    -4.47    -4.43     -5.28
+win (Base:LoRA:Tie)  15:4:1   14:3:1     18:1:1   13:6:1   16:2:1    14:4:2
 ```
 
-![Loss Curve](outputs/loss_curve.png)
+### Evaluation Method: LLM-as-Judge
 
-### Analysis
+The judge evaluates 5 dimensions independently (1-5 scale):
 
-- **47% eval loss reduction** (2.43 → 1.27): the model effectively adapts to the Alpaca-GPT4-ZH data distribution
-- **Train-eval gap**: 1.28 vs 1.27 at convergence — no significant overfitting
-- **Stable convergence**: eval loss decreases monotonically from step 0 through step 450
+| Dimension | Description | Anchors |
+|-----------|-------------|---------|
+| **helpfulness** | Does it solve the problem? | 1=No, 3=Partial, 5=Completely |
+| **accuracy** | Are facts correct? | 1=Major errors, 3=Minor issues, 5=Perfect |
+| **completeness** | Are key aspects covered? | 1=Shallow, 3=Mostly, 5=Thorough |
+| **structure** | Is it well-organized? | 1=Chaotic, 3=Basic, 5=Excellent |
+| **style_alignment** | Matches Alpaca style? | 1=Not at all, 3=Partial, 5=Perfect |
 
-## Evaluation Method
-
-### LLM-as-Judge with DeepSeek-v4-flash
-
-The evaluation uses an external LLM as a judge to score model outputs across 5 dimensions:
-
-| Dimension | Description | 1-3-5 Anchors |
-|-----------|-------------|---------------|
-| **helpfulness** | Does the answer solve the user's problem? | 1=Not at all, 3=Partial, 5=Completely |
-| **accuracy** | Are the facts and information correct? | 1=Major errors, 3=Minor issues, 5=Perfect |
-| **completeness** | Are key aspects covered? | 1=Shallow, 3=Mostly complete, 5=Thorough |
-| **structure** | Is the answer well-organized? | 1=Chaotic, 3=Basic structure, 5=Excellent |
-| **style_alignment** | Does it match Alpaca-GPT4-ZH style? | 1=Not at all, 3=Partial, 5=Perfect match |
-
-### Position Bias Mitigation
+**Position Bias Mitigation:**
 
 ```mermaid
 flowchart LR
-    Q[Question] --> GenA[Base generates answer]
-    Q --> GenB[LoRA generates answer]
-    GenA --> Rand{Random assign}
+    Q[Question] --> GenA[Base generates]
+    Q --> GenB[LoRA generates]
+    GenA --> Rand{Random A/B assignment}
     GenB --> Rand
-    Rand -->|Answer A| Judge[DeepSeek Judge]
+    Rand -->|Answer A| Judge[DeepSeek-v4-flash]
     Rand -->|Answer B| Judge
     Judge --> Map{Reverse mapping}
     Map --> BaseScores[Base scores]
     Map --> LoraScores[LoRA scores]
 ```
 
-- Base and LoRA outputs are randomly assigned to "Answer A" / "Answer B" for each question
-- The judge scores blindly without knowing which model produced which answer
-- Scores are reverse-mapped after evaluation
-- This distributes any position preference evenly across both models
-
-### Stability Mechanisms
-
-- `temperature=0.0` for deterministic, reproducible scores
-- Structured JSON output format with predefined schema
-- Per-dimension independent scoring prevents halo effects
-- 5 dimensions averaged across 7 questions to smooth single-question noise
+- `temperature=0.0` for deterministic scoring
+- Structured JSON output, fixed schema
+- Independent per-dimension scoring prevents halo effects
 - Exponential backoff retry on API errors (up to 3 attempts)
 
-## Evaluation Results
+### Key Finding: Qwen Base > Alpaca Ground Truth
 
-```
-│ Dimension         │  Base   │  LoRA   │  Change │
-│──────────────────────────────────────────────────│
-│ helpfulness       │   3.57  │   3.57  │  +0.00  │
-│ accuracy          │   4.43  │   3.86  │  -0.57  │
-│ completeness      │   3.14  │   3.57  │  +0.43  │
-│ structure         │   4.29  │   3.29  │  -1.00  │
-│ style_alignment   │   4.00  │   3.14  │  -0.86  │
-│──────────────────────────────────────────────────│
-│ Average total     │         │         │  -0.40  │
-```
+A head-to-head evaluation of Qwen2.5-7B-Instruct's native answers vs. GPT-4 generated Alpaca training data on 10 questions:
 
-```
-Win count: Base 5, LoRA 2, Tie 0 / 7 questions
-```
+- **Qwen wins 7:3**, especially in style (+1.40) and structure (+0.60)
+- Fine-tuning toward Alpaca is fundamentally degrading the model
+- The real solution: use **better data than Alpaca** (self-distillation or higher-quality datasets)
 
-### Analysis
+---
 
-- **LoRA improved completeness (+0.43)**: answers became more thorough and detailed, aligning with Alpaca-GPT4-ZH's verbose style
-- **LoRA degraded accuracy (-0.57)**: the fine-tuned model occasionally introduced minor factual errors (e.g., incorrect author attribution for _Water Margin_)
-- **LoRA lost structural quality (-1.00)**: the base model uses markdown formatting (bold, headings) while LoRA outputs simpler plain numbered lists
-- **Overall**: 2,000 samples with attention-only LoRA improves completeness but Qwen2.5-7B-Instruct's base quality is hard to surpass with limited data
+## Part 2: Text-to-SQL (SQaLe Dataset)
 
-## Future Improvements
+### Dataset
+
+- **Source**: [trl-lab/SQaLe-text-to-SQL-dataset](https://huggingface.co/datasets/trl-lab/SQaLe-text-to-SQL-dataset)
+- **Scale**: 511K triples (CREATE TABLE DDL, natural language question, validated SQL)
+- **Schemas**: Derived from 135K real database schemas
+- **Filtering**: max_length=2048, ~13.9% fit rate, sampled 3,000 train + 300 val
 
 ### Training
 
-| Improvement | Expected Benefit |
-|-------------|-----------------|
-| Increase data to 5K-10K samples | More style transfer signal |
-| Lower learning rate (1e-4) | Smoother convergence, better generalization |
-| Add system prompt to training data | Better control over output style |
-| QLoRA (4-bit quantization) | 4× memory reduction, larger batch sizes |
-| Multi-turn conversation data | More realistic dialogue training |
-| Data quality filtering | Remove noisy/too-short samples |
+- LoRA r=16, α=32, q/k/v/o, batch=1, grad_accum=8, max_length=2048, 3 epochs
+- Training time: 70.8 min on RTX 4090
+- Eval loss: 1.06 → 0.44 (58% reduction)
 
-### Evaluation
+### Evaluation: Dual Method
 
-| Improvement | Expected Benefit |
-|-------------|-----------------|
-| Larger test set (50+ questions) | More statistically significant results |
-| Multiple judge passes with averaging | Higher score stability |
-| Add diversity metrics (Distinct-N, Self-BLEU) | Detect memorization/overfitting |
-| Use GPT-4 as reference answer baseline | Calibrate judge scoring |
-| Human evaluation on a subset | Ground truth validation |
-| Pairwise win-rate instead of absolute scores | More robust comparison metric |
+**1. SQLite Execution (objective):**
 
-### Deployment (P0 Roadmap)
+Each generated SQL is executed against an in-memory SQLite database created from the schema DDL:
 
-1. Merge LoRA + convert to GGUF Q4_K_M
-2. llama.cpp server with TTFT measurement
-3. vLLM deployment with concurrency benchmarking
+```
+Base Model: 0% executable  (outputs explanatory text + SQL in markdown blocks)
+LoRA Model: 60% executable (learns pure SQL output)
+```
+
+**2. DeepSeek Judge (subjective):**
+
+3-dimension scoring with reference gold SQL:
+
+```
+Dimension             Base    LoRA    Δ
+executability           --      --   +0.31
+logical_correctness     --      --   +0.23
+conciseness             --      --   +0.23
+Win: Base=2, LoRA=3, Tie=8 / 13 evaluated
+```
+
+---
+
+## Key Learnings
+
+1. **Training data quality > quantity**: Qwen2.5-7B-Instruct base outperforms GPT-4 generated Alpaca answers. Fine-tuning on lower-quality data degrades performance.
+2. **Mixed data works**: Adding BELLE-0.5M diversity (70:20 Alpaca:BELLE mix) was the single largest improvement across all experiments (total Δ improved from -7.00 to -4.47).
+3. **Text2SQL is effective**: LoRA learns pure SQL output, going from 0% to 60% executable. The model becomes directly deployable as a text-to-SQL service.
+4. **System prompts matter**: Adding Markdown formatting instructions to training data helps, but overly complex few-shot prompts can backfire (v6 tier1 experiment).
+5. **Small data needs higher LR**: Lower LR (5e-5) with 5K samples performed worse than higher LR (2e-4) with 2K samples. On small datasets, being conservative with learning rate hurts convergence.
+6. **Replay buffer has diminishing returns**: Adding Qwen base answers as replay targets improved structure marginally (-1.26→-1.00) but total score remained flat (-4.47→-4.43).
+7. **Increasing rank + modules can overfit**: v6 with rank 16→32, adding gate_proj, and few-shot prompt made ALL dimensions worse despite more parameters.
+
+## Evaluation Architecture
+
+```mermaid
+flowchart TD
+    subgraph Input
+        Q[Test Questions<br/>From val.jsonl]
+    end
+
+    subgraph Generation
+        BaseM[Base Model: Qwen2.5-7B-Instruct]
+        LoRAM[LoRA Model: Base + Adapter]
+        BaseM --> BaseA[Base Answers]
+        LoRAM --> LoRAA[LoRA Answers]
+    end
+
+    subgraph Judge[DeepSeek-v4-flash Judge]
+        Rand[Randomize A/B Order]
+        Score[Score 5 Dimensions]
+        Map[Reverse Map Scores]
+    end
+
+    subgraph Output
+        Summary[Per-dimension averages<br/>Win/Loss/Tie counts<br/>Total Δ scores]
+        JSON[outputs/judge_results.json]
+    end
+
+    Q --> BaseM & LoRAM
+    BaseA & LoRAA --> Rand --> Score --> Map --> Summary & JSON
+```
+
+## Dependencies
+
+- Python ≥ 3.12
+- PyTorch 2.4+ (CUDA 12.8)
+- transformers, peft, accelerate, datasets, trl
+- deepspeed (optional, multi-GPU)
+- openai (for LLM-as-Judge)
+- matplotlib, pandas, tensorboard
+
+```bash
+uv sync
+```
