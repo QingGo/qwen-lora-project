@@ -23,10 +23,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output_dir", default="./outputs/qwen2.5-7b-lora-output")
     parser.add_argument("--adapter_dir", default="./outputs/qwen2.5-7b-lora-adapter")
 
-    parser.add_argument("--lora_rank", type=int, default=16)
-    parser.add_argument("--lora_alpha", type=int, default=32)
+    parser.add_argument("--lora_rank", type=int, default=32)
+    parser.add_argument("--lora_alpha", type=int, default=16)
     parser.add_argument("--lora_dropout", type=float, default=0.05)
-    parser.add_argument("--lora_target_modules", default="q_proj,k_proj,v_proj,o_proj")
+    parser.add_argument("--lora_target_modules", default="q_proj,k_proj,v_proj,o_proj,gate_proj")
 
     parser.add_argument("--num_epochs", type=int, default=3)
     parser.add_argument("--batch_size", type=int, default=2)

@@ -34,8 +34,8 @@ deepspeed --num_gpus="$NUM_GPUS" train_qwen_lora.py \
     --output_dir ./outputs/qwen2.5-7b-lora-output \
     --adapter_dir ./outputs/qwen2.5-7b-lora-adapter \
     --deepspeed_config "$DS_CONFIG" \
-    --lora_rank 16 \
-    --lora_alpha 32 \
+    --lora_rank 32 \
+    --lora_alpha 16 \
     --batch_size 2 \
     --grad_accum 4 \
     --num_epochs 3 \

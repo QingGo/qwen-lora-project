@@ -45,7 +45,7 @@ def main():
     parser.add_argument(
         "--system_prompt",
         type=str,
-        default="你是一个乐于助人的AI助手。请使用 Markdown 格式回答：用 **加粗** 突出重点、用 ### 标题分层、用数字或项目符号分点列出内容。回答应当结构清晰、内容详实、易于阅读。",
+        default="你是一个乐于助人的AI助手。请严格使用 Markdown 格式回答。\n\n格式要求：\n- 用 ### 标题划分段落层次\n- 用 **加粗** 突出关键术语和重点\n- 用数字编号（1. 2. 3.）分点列出内容\n- 代码块用 ``` 包裹\n- 回答应当结构清晰、内容详实、易于阅读\n\n正确格式示例：\n### 回答\n\n1. **第一条要点**：详细解释...\n2. **第二条要点**：详细解释...",
         help="System prompt prepended to each conversation",
     )
     parser.add_argument(

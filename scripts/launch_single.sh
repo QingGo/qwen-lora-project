@@ -22,7 +22,7 @@ echo "[1/2] 准备数据..."
 $PYTHON scripts/prepare_data.py --num_samples 5000
 echo ""
 
-# 训练 (attention-only LoRA: q_proj,k_proj,v_proj,o_proj -> ~12M params)
+# 训练 (LoRA: q,k,v,o,gate_proj, rank=32, alpha=16 -> ~38M params)
 echo "[2/2] 开始训练..."
 $PYTHON train_qwen_lora.py \
     --model_path ./models/Qwen2.5-7B-Instruct \
@@ -30,9 +30,9 @@ $PYTHON train_qwen_lora.py \
     --eval_data_path ./data/val.jsonl \
     --output_dir ./outputs/qwen2.5-7b-lora-output \
     --adapter_dir ./outputs/qwen2.5-7b-lora-adapter \
-    --lora_rank 16 \
-    --lora_alpha 32 \
-    --lora_target_modules q_proj,k_proj,v_proj,o_proj \
+    --lora_rank 32 \
+    --lora_alpha 16 \
+    --lora_target_modules q_proj,k_proj,v_proj,o_proj,gate_proj \
     --batch_size 2 \
     --grad_accum 4 \
     --num_epochs 3 \
