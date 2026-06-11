@@ -15,3 +15,14 @@ data/
 outputs/*
 runs/
 !outputs/loss_curve.png
+outputs_l2/qwen2.5-7b-lora-adapter/
+outputs_l2/checkpoint-*/
+outputs_l2/loss_history.json
+outputs_l2/runs/
+outputs_l3/
+outputs_l4/qwen2.5-7b-lora-adapter/
+outputs_l4/checkpoint-*/
+outputs_l4/loss_history.json
+outputs_l4/runs/
+outputs_l4/train.log
+run_l4.sh

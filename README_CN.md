@@ -104,11 +104,19 @@ qwen-lora-project/
 ├── outputs/
 │   ├── baselines.jsonl            # 所有实验记录
 │   ├── judge_results.json         # 最新指令微调评测结果
-│   ├── text2sql_eval.json         # Text2SQL 评测结果
+│   ├── text2sql_eval.json         # Text2SQL 评测结果 (weak)
+│   ├── text2sql_eval_strong.json   # Text2SQL 评测 (strong prompt)
+│   ├── text2sql_eval_strong_pp.json # Text2SQL 评测 (strong + post-process)
+│   ├── text2sql_eval_strong_1024.json # Text2SQL 评测 (strong + 1024 tok)
+│   ├── text2sql_eval_cot.json      # Text2SQL 评测 (CoT prompt)
+│   ├── text2sql_eval_strong_l2_pp_sd.json # L2 + Self-Debug
+│   ├── text2sql_eval_strong_l4_pp_sd.json # L4 (strong+window) + Self-Debug
 │   ├── loss_history.json
 │   ├── loss_curve.png
-│   ├── qwen2.5-7b-lora-adapter/
-│   └── qwen2.5-7b-lora-output/
+│   ├── qwen2.5-7b-lora-adapter/    # L1 adapter
+│   ├── qwen2.5-7b-lora-output/     # L1 训练输出
+│   ├── outputs_l2/                  # L2: 6K 样本, 3072 上下文
+│   └── outputs_l4/                  # L4: strong prompt + 窗口函数
 └── pyproject.toml
 ```
 
@@ -131,6 +139,7 @@ python scripts/judge.py --num_questions 20
 python scripts/prepare_text2sql_data.py --num_proc 10
 python train_qwen_lora.py --data_path ./data/train.jsonl --max_length 2048 --batch_size 1 --grad_accum 8 --lora_rank 16 --lora_alpha 32 --learning_rate 2e-4
 python scripts/eval_text2sql.py --n_samples 20
+python scripts/eval_text2sql.py --n_samples 15 --base_prompt_mode strong  # 公平对比
 
 # 多卡 DeepSpeed：
 # bash scripts/launch_multi.sh 4 2    # 4卡 ZeRO-2
@@ -241,26 +250,90 @@ flowchart LR
 
 ### 评测：双重方法
 
-**1. SQLite 执行（客观指标）：**
+将生成的 SQL 在根据 DDL schema 创建的内存 SQLite 数据库中执行，再用 DeepSeek-v4-flash 对 3 个维度以参考 SQL 为基准评分。
 
-将生成的 SQL 在根据 DDL schema 创建的内存 SQLite 数据库中执行：
-
-```
-基座模型: 0% 可执行  （输出解释性文本 + Markdown 包裹的 SQL）
-LoRA模型: 60% 可执行 （学会输出纯 SQL）
-```
-
-**2. DeepSeek Judge（主观评测）：**
-
-以参考 SQL 为基准的三维评分：
+经过多轮改进（后处理、Self-Debug、扩大训练数据、strong prompt 训练），**LoRA 可执行率达 93%**，judge 评分接近满分：
 
 ```
-维度                   基座    LoRA    Δ
-executability            --      --   +0.31
-logical_correctness      --      --   +0.23
-conciseness              --      --   +0.23
-胜负: Base=2, LoRA=3, 平局=8 / 13题
+配置                    Exec    e_score   logic   Win B/L/T
+L1: 3000/wk/2048          93%     4.38      3.38    LoRA 6:2:5
+L2: 6000/wk/3072          93%     4.64      4.00    LoRA 5:1:5
+L4: 6000/str+win/3072     87%     5.00      4.45    LoRA 5:1:5
 ```
+
+### 改进历程：后处理 → Self-Debug → 数据扩展
+
+**P0: 后处理 `;` 拆分（一行代码，不动训练）**
+
+只取第一个 `;` 前的 SQL 语句，解决 27% 的多语句失败。可执行率 60% → 93%。
+
+**P1: Self-Debug（错误反馈重试，不动训练）**
+
+SQLite 执行失败时，将报错信息喂回模型让其修正（最多 2 次重试）。修复了 Base Q2（`no such function: CURDATE`），但未能救回 LoRA Q15（复杂多表 schema）。
+
+**L2: 数据扩展（6000 样本，max_length 3072）**
+
+训练数据翻倍，上下文 2048→3072。`logical_correctness` 从 3.38 大幅跃升至 4.00，解决了 schema 截断问题并覆盖了更多样化的 SQL 模式。
+
+**L4: Strong prompt 训练 + 窗口函数增强**
+
+用 "CRITICAL: Output ONLY raw SQL" 作为训练 system prompt，并新增 1,188 条窗口函数样本（RANK、ROW_NUMBER 等）。**Executability 达到 5.00（judge 满分）**，logic 提升至 4.45。窗口函数增强了"最高 AND 最低"类查询模式的正确率。
+
+### Prompt 公平性实验：基线对比是否公平？
+
+原始 0% vs 60% 可执行率差距引发了一个问题：基座模型失败是因为不会写 SQL，还是因为没有被要求只输出 SQL？
+
+在相同的 15 条验证样本（seed=42）上测试了三种 prompt 策略：
+
+| Prompt 模式 | 描述 | max_tokens |
+|-------------|-------------|:---:|
+| **weak**（原始） | "为问题写一个 SQL 查询" — 无格式约束 | 256 |
+| **strong** | "CRITICAL: 只输出纯 SQL。不要任何解释或 markdown。" | 256 |
+| **cot** | 逐步分析推理，最终 SQL 用 `<sql>` 标签包裹。多策略提取（标签、代码块、标题）。 | 1024 |
+
+另跑 `strong_1024` 作为对照，分离 token budget 效应和 prompt 效应。
+
+#### 实验结果
+
+```text
+模式          tokens   基座可执行    LoRA可执行    executability B/L    Win B/L/T
+weak_256       256     0% ( 0/13)   69% ( 9/13)   2.85 / 3.15        2 / 3 / 8
+strong_256     256    72% ( 8/11)   72% ( 8/11)   3.64 / 3.55        4 / 3 / 4
+strong_1024   1024    72% ( 8/11)   81% ( 9/11)   4.00 / 3.91        3 / 2 / 6   ← 对照
+cot_1024      1024    66% ( 8/12)  100% (12/12)   4.08 / 5.00        3 / 7 / 2
+```
+
+**核心发现：原始对比不公平。** 仅加一句话的 strong prompt，基座可执行率从 0% 直接提升到 72%，追平 LoRA。整个差距是由**格式指令缺失**造成的，不是 SQL 能力差距。
+
+#### Token Budget 分析：256 够不够？
+
+```text
+训练集 (3000): 中位数=64,  P95=237,  >256: 4.1%,  >512: 0.3%
+验证集 (300):  中位数=68,  P95=225,  >256: 2.7%,  >512: 0%
+评测子集 (15):  最大=301,   >256: 1/15 样本
+```
+
+`strong_256` vs `strong_1024` 对照证实：**256 tokens 足够** — 基座可执行率完全一致（均为 72%）。剩余失败是 SQL 逻辑/语法错误，不是截断。
+
+#### CoT 分析
+
+- CoT 推理并未提升基座 SQL 质量（可执行率：CoT 66% vs Strong 72%）
+- Qwen2.5-7B-Instruct 不遵循 `<sql>` 标签格式 — 偏好 markdown `### Final SQL:`
+- LoRA 完全忽视 CoT 格式（被训练为纯 SQL 输出，不会做推理）
+- **建议：** 使用 `strong` prompt 进行所有公平的 Text2SQL 对比
+
+### Bad Case 分析：LoRA SQL 失败分类
+
+15 题中 6 题 LoRA 输出无法执行（40% 失败率）：
+
+| 类别 | 数量 | 根因 | 修复 |
+|----------|:-----:|-------------|-----|
+| 多语句输出（含 `;`） | 4 (27%) | "最高 AND 最低" → 拆成两个 `ORDER BY LIMIT 1` 查询 | 后处理：只取第一个 `;` 前的 SQL |
+| SQL 被截断 | 1 (7%) | `max_new_tokens=256` 截断 CTE | 提升到 512 |
+| 输入噪声 | 1 (7%) | 数据集中的 `<Example question 4>` 占位符 | 过滤噪声数据 |
+| Schema 被截断 | 2 (13%) | `max_length=2048` 训练时丢失了表 | 增大 max_length |
+
+**实际有效可执行率**（排除噪声）：9/14 = 64%。**最优先修复：后处理只取第一个 `;` 前的 SQL** — 一行代码解决 27% 的失败。
 
 ---
 
@@ -273,6 +346,12 @@ conciseness              --      --   +0.23
 5. **小数据集需要更高学习率**：在 5K 样本上用低 LR（5e-5）比在 2K 样本上用高 LR（2e-4）效果更差。小数据量时过于保守的学习率会损害收敛。
 6. **Replay buffer 边际收益递减**：加入 Qwen 基座回答作为 replay 目标仅略微改善结构性（-1.26→-1.00），总评分基本持平（-4.47→-4.43）。
 7. **增加参数量可能导致过拟合**：v6 将 rank 从 16 提升至 32、增加 gate_proj 模块、使用 few-shot prompt，结果所有维度反而更差。
+8. **Prompt 公平性影响评测结论**：基座模型 0% 可执行率是格式指令缺失的产物。使用 strong prompt（"只输出纯 SQL"）后基座达到 72% 可执行率，与 LoRA 持平。基线对比必须控制 prompt 格式变量。
+9. **Token budget 不是瓶颈**：256 tokens 覆盖 >95% 训练 SQL。Strong_256 vs strong_1024 基座可执行率零差异。资源应投入数据/模型质量，而非 token budget。
+10. **Text2SQL 不需要链式推理**：CoT 推理消耗 token 预算但未提升 SQL 质量。基座和 LoRA 模型都无法可靠遵循结构化输出标签。
+11. **后处理性价比极高**：27% 的 LoRA SQL 失败是多语句输出。只取第一个 `;` 前的 SQL 是一行业代码的修复，收益巨大。
+12. **Self-Debug 修复表层错误，无法解决深层逻辑**：错误反馈重试适用于简单问题（函数名错误），但无法修复复杂 schema 理解缺陷（错误表/列引用）。
+13. **数据扩展 + strong prompt → 接近满分质量**：6K 样本 + 3072 上下文 + strong system prompt + 窗口函数增强，实现了 judge 评测的完美 executability（5.00）和 4.45 的 logical_correctness。
 
 ## 评测架构
 
