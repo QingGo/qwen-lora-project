@@ -260,10 +260,10 @@ After iterative improvements (post-processing, Self-Debug, larger training data,
 
 ```
 Config                    Exec    e_score   logic   Win B/L/T
-L1: 3000/wk/2048          93%     4.38      3.38    LoRA 6:2:5
-L2: 6000/wk/3072          93%     4.64      4.00    LoRA 5:1:5
-L4: 6000/str+win/3072     87%     5.00      4.45    LoRA 5:1:5
-L5: 6000/str+win/3072     93%     4.64      4.27    LoRA 6:0:5  ← clean data
+L1: 3000/wk/2048          93%     4.38      3.38    2:5:5
+L2: 6000/wk/3072          93%     4.64      4.00    1:5:5
+L4: 6000/str+win/3072     87%     5.00      4.45    1:5:5
+L5: 6000/str+win/3072     93%     4.64      4.27    0:6:5  ← clean data
 ```
 
 ### Improvements: Post-Processing to Self-Debug to Data Scaling
