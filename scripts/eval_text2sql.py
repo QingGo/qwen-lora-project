@@ -284,6 +284,10 @@ def main():
                         help="Self-Debug: feed execution errors back to model for correction")
     parser.add_argument("--self_debug_retries", type=int, default=2,
                         help="Max self-debug retry attempts (default 2)")
+    parser.add_argument("--resume", action="store_true",
+                        help="Resume from previous run (skip already-evaluated questions)")
+    parser.add_argument("--no_judge", action="store_true",
+                        help="Skip LLM judge, collect execution stats only")
     args = parser.parse_args()
 
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
@@ -310,14 +314,44 @@ def main():
         print(f"  Post-process: take first ;-delimited SQL statement")
     if args.self_debug:
         print(f"  Self-Debug: error feedback retry (max {args.self_debug_retries} attempts)")
+    if args.no_judge:
+        print(f"  Judge: DISABLED (execution-only mode)")
     print(f"  Base system prompt:\n    {base_system_prompt[:120]}...")
     print()
 
     random.seed(args.seed)
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
+    client = None if args.no_judge else OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1")
+
+    suffix = args.output_suffix
+    if args.post_process and "_pp" not in suffix:
+        suffix += "_pp"
+    if args.self_debug and "_sd" not in suffix:
+        suffix += "_sd"
+    output_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
+                               "outputs", f"text2sql_eval_{args.base_prompt_mode}{suffix}.json")
 
     val_samples = load_val_samples(args.n_samples)
     print(f"Loaded {len(val_samples)} validation samples\n")
+
+    skipped_questions = set()
+    resume_total_old = 0
+    resume_base_exec = 0
+    resume_lora_exec = 0
+    if args.resume:
+        if os.path.exists(output_file):
+            with open(output_file) as f:
+                old_results = json.load(f)
+            resume_total_old = len(old_results)
+            for r in old_results:
+                skipped_questions.add(r["question"])
+                if r.get("base_valid"):
+                    resume_base_exec += 1
+                if r.get("lora_valid"):
+                    resume_lora_exec += 1
+            print(f"Resume: loaded {resume_total_old} existing results, "
+                  f"base_exec={resume_base_exec}, lora_exec={resume_lora_exec}")
+        else:
+            print(f"Resume: no existing results found, starting fresh")
 
     print("Loading model...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True, use_fast=True)
@@ -327,21 +361,31 @@ def main():
     )
     model = PeftModel.from_pretrained(model, args.adapter_path)
 
+    def save_results(results):
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+
     dims = ["executability", "logical_correctness", "conciseness"]
     base_scores = {d: [] for d in dims}
     lora_scores = {d: [] for d in dims}
-    base_exec_ok = 0
-    lora_exec_ok = 0
+    base_exec_ok = resume_base_exec
+    lora_exec_ok = resume_lora_exec
     base_wins = lora_wins = ties = 0
     results = []
     total = len(val_samples)
+    skipped_count = 0
 
     for idx, record in enumerate(val_samples):
         schema, question, gold_sql = extract_schema_and_question(record)
         if not schema or not question:
             continue
 
-        print(f"\n[{idx + 1}/{total}] {question[:100]}...")
+        if question in skipped_questions:
+            skipped_count += 1
+            continue
+
+        effective_idx = idx + 1 - skipped_count
+        print(f"\n[{effective_idx}/{total - len(skipped_questions)}] {question[:100]}...")
 
         model.disable_adapter_layers()
         base_raw = generate_sql(model, tokenizer, schema, question,
@@ -373,14 +417,18 @@ def main():
         lora_valid, lora_err = validate_sql(schema, lora_sql)
 
         base_retries = lora_retries = 0
+        base_sd_errors = []
+        lora_sd_errors = []
 
         if args.self_debug:
             # Self-Debug for Base model
             model.disable_adapter_layers()
+            base_sd_errors = []
             for attempt in range(args.self_debug_retries):
                 if base_valid:
                     break
                 base_retries = attempt + 1
+                base_sd_errors.append(base_err[:200])
                 fixed = self_debug_fix(model, tokenizer, schema, question,
                                        base_sql, base_err,
                                        base_system_prompt, cot_max_tokens,
@@ -392,12 +440,17 @@ def main():
                 if base_valid:
                     print(f"  Base self-debug OK (retry {attempt+1})")
 
+            if base_retries > 0 and not base_valid:
+                print(f"  Base self-debug FAILED after {base_retries} retries: {base_err[:80]}")
+
             # Self-Debug for LoRA model
             model.enable_adapter_layers()
+            lora_sd_errors = []
             for attempt in range(args.self_debug_retries):
                 if lora_valid:
                     break
                 lora_retries = attempt + 1
+                lora_sd_errors.append(lora_err[:200])
                 fixed = self_debug_fix(model, tokenizer, schema, question,
                                        lora_sql, lora_err,
                                        lora_system_prompt, lora_max_tokens,
@@ -408,6 +461,9 @@ def main():
                 lora_valid, lora_err = validate_sql(schema, lora_sql)
                 if lora_valid:
                     print(f"  LoRA self-debug OK (retry {attempt+1})")
+
+            if lora_retries > 0 and not lora_valid:
+                print(f"  LoRA self-debug FAILED after {lora_retries} retries: {lora_err[:80]}")
 
         if base_valid:
             base_exec_ok += 1
@@ -431,7 +487,32 @@ def main():
         label_a = "Base" if base_is_a else "LoRA"
         label_b = "LoRA" if base_is_a else "Base"
 
-        judge_result = judge_sql(client, schema, question, gold_sql, sql_a, sql_b, label_a, label_b)
+        result_entry = {
+            "question": question,
+            "gold_sql": gold_sql,
+            "base_sql": base_sql,
+            "lora_sql": lora_sql,
+            "base_valid": base_valid,
+            "lora_valid": lora_valid,
+        }
+        if args.self_debug:
+            result_entry["base_retries"] = base_retries
+            result_entry["lora_retries"] = lora_retries
+            if base_retries > 0:
+                result_entry["base_sd_first_error"] = base_sd_errors[0] if base_sd_errors else ""
+                result_entry["base_sd_all_errors"] = base_sd_errors
+            if lora_retries > 0:
+                result_entry["lora_sd_first_error"] = lora_sd_errors[0] if lora_sd_errors else ""
+                result_entry["lora_sd_all_errors"] = lora_sd_errors
+        if is_cot:
+            result_entry["base_raw"] = base_raw
+            result_entry["lora_raw"] = lora_raw
+            result_entry["base_extracted"] = (base_raw != base_sql)
+            result_entry["lora_extracted"] = (lora_raw != lora_sql)
+
+        judge_result = None
+        if not args.no_judge:
+            judge_result = judge_sql(client, schema, question, gold_sql, sql_a, sql_b, label_a, label_b)
 
         if judge_result:
             sa = judge_result["sql_a"]
@@ -458,31 +539,53 @@ def main():
             print(f"  Judge: Base={bt}, LoRA={lt} → {w}")
             print(f"  {judge_result.get('comparison', '')[:120]}")
 
-            result_entry = {
-                "question": question,
-                "gold_sql": gold_sql,
-                "base_sql": base_sql,
-                "lora_sql": lora_sql,
-                "base_valid": base_valid,
-                "lora_valid": lora_valid,
-                "base_scores": bd,
-                "lora_scores": ld,
-                "comparison": judge_result.get("comparison", ""),
-            }
-            if args.self_debug:
-                result_entry["base_retries"] = base_retries
-                result_entry["lora_retries"] = lora_retries
-            if is_cot:
-                result_entry["base_raw"] = base_raw
-                result_entry["lora_raw"] = lora_raw
-                result_entry["base_extracted"] = (base_raw != base_sql)
-                result_entry["lora_extracted"] = (lora_raw != lora_sql)
-            results.append(result_entry)
+            result_entry["base_scores"] = bd
+            result_entry["lora_scores"] = ld
+            result_entry["comparison"] = judge_result.get("comparison", "")
+        else:
+            print(f"  ⚠ Judge skipped (API failure or both SQL invalid)")
+        results.append(result_entry)
+        save_results(results)  # incremental save for resume support
 
-    n = len(results)
+    # Merge with old results for stats
+    all_results = results
+    if args.resume and os.path.exists(output_file):
+        with open(output_file) as f:
+            old = json.load(f)
+        # New results overwrite old ones with same question
+        old_map = {r["question"]: r for r in old}
+        for r in all_results:
+            old_map[r["question"]] = r
+        all_results = list(old_map.values())
+        save_results(all_results)
+
+    n_total = total - len(skipped_questions) + (resume_total_old if args.resume else 0)
+    n = len(all_results)
+    n_judged = sum(1 for r in all_results if "base_scores" in r)
+    n_skipped = n - n_judged
+
+    # Recompute stats from all results
+    for r in all_results:
+        if "base_scores" in r:
+            for d in dims:
+                base_scores[d].append(r["base_scores"][d])
+                lora_scores[d].append(r["lora_scores"][d])
+            bt = sum(r["base_scores"].values())
+            lt = sum(r["lora_scores"].values())
+            if lt > bt:
+                lora_wins += 1
+            elif bt > lt:
+                base_wins += 1
+            else:
+                ties += 1
+
+    base_exec_ok = sum(1 for r in all_results if r.get("base_valid"))
+    lora_exec_ok = sum(1 for r in all_results if r.get("lora_valid"))
+
     print(f"\n{'=' * 60}")
-    print(f"Evaluation Complete (n={n}) — base_prompt_mode={args.base_prompt_mode}")
+    print(f"Evaluation Complete — base_prompt_mode={args.base_prompt_mode}")
     print(f"{'=' * 60}")
+    print(f"Total samples: {n_total}, Judged: {n_judged}, Skipped: {n_skipped}")
 
     print(f"\n{'Execution Rate':<25} {'Base':>10} {'LoRA':>10}")
     print(f"{'  Valid SQL':<25} {base_exec_ok/total*100:>9.1f}% {lora_exec_ok/total*100:>9.1f}%")
@@ -495,19 +598,27 @@ def main():
             avg_l = sum(lora_scores[d]) / len(lora_scores[d])
             print(f"{d:<25} {avg_b:>8.2f} {avg_l:>8.2f} {avg_l-avg_b:>+8.2f}")
 
-    print(f"\nWin: Base={base_wins}, LoRA={lora_wins}, Tie={ties} / {n}")
-    print(f"Base exec rate: {base_exec_ok}/{total} ({base_exec_ok/total*100:.0f}%)")
-    print(f"LoRA exec rate: {lora_exec_ok}/{total} ({lora_exec_ok/total*100:.0f}%)")
+    print(f"\nWin: Base={base_wins}, LoRA={lora_wins}, Tie={ties} / {n_judged}")
+    print(f"Base exec rate: {base_exec_ok}/{n_total} ({base_exec_ok/n_total*100:.0f}%)")
+    print(f"LoRA exec rate: {lora_exec_ok}/{n_total} ({lora_exec_ok/n_total*100:.0f}%)")
 
-    suffix = args.output_suffix
-    if args.post_process and "_pp" not in suffix:
-        suffix += "_pp"
-    if args.self_debug and "_sd" not in suffix:
-        suffix += "_sd"
-    output_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
-                               "outputs", f"text2sql_eval_{args.base_prompt_mode}{suffix}.json")
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    if args.self_debug:
+        sd_base_fixed = sum(1 for r in all_results if r.get("base_retries", 0) > 0 and r.get("base_valid"))
+        sd_lora_fixed = sum(1 for r in all_results if r.get("lora_retries", 0) > 0 and r.get("lora_valid"))
+        sd_base_failed = sum(1 for r in all_results if r.get("base_retries", 0) > 0 and not r.get("base_valid"))
+        sd_lora_failed = sum(1 for r in all_results if r.get("lora_retries", 0) > 0 and not r.get("lora_valid"))
+        print(f"\nSelf-Debug stats:")
+        print(f"  Base: fixed={sd_base_fixed}, failed={sd_base_failed}")
+        print(f"  LoRA: fixed={sd_lora_fixed}, failed={sd_lora_failed}")
+        for r in all_results:
+            if r.get("lora_retries", 0) > 0 and not r.get("lora_valid"):
+                print(f"\n  LoRA SD failed: {r['question'][:80]}")
+                print(f"    First error: {r.get('lora_sd_first_error', 'N/A')[:120]}")
+                print(f"    All errors: {r.get('lora_sd_all_errors', [])}")
+            if r.get("base_retries", 0) > 0 and not r.get("base_valid"):
+                print(f"\n  Base SD failed: {r['question'][:80]}")
+                print(f"    First error: {r.get('base_sd_first_error', 'N/A')[:120]}")
+
     print(f"\nDetailed results saved to: {output_file}")
 
 

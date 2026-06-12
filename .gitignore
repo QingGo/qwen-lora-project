@@ -15,14 +15,26 @@ data/
 outputs/*
 runs/
 !outputs/loss_curve.png
+
+# Training outputs - ignore large checkpoints, keep logs
 outputs_l2/qwen2.5-7b-lora-adapter/
 outputs_l2/checkpoint-*/
-outputs_l2/loss_history.json
 outputs_l2/runs/
 outputs_l3/
 outputs_l4/qwen2.5-7b-lora-adapter/
 outputs_l4/checkpoint-*/
-outputs_l4/loss_history.json
 outputs_l4/runs/
-outputs_l4/train.log
+outputs_l5/qwen2.5-7b-lora-adapter/
+outputs_l5/checkpoint-*/
+outputs_l5/runs/
+
+# Training data - ignore large train files, keep val
+data_l2/train_strong.jsonl
+data_l2/window_strong.jsonl
+data_l3/train.jsonl
+data_l3/train_window.jsonl
+data_l3/window_samples.jsonl
+data_test/
+
+# Scripts
 run_l4.sh
