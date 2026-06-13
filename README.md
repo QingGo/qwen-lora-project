@@ -480,6 +480,31 @@ The `strong_256` vs `strong_1024` control confirms: **256 tokens is sufficient**
 
 5. **DPO/contrastive learning**: (question, good_sql, model_bad_sql) triples for targeted correction.
 
+## Function Calling
+
+Qwen2.5-7B-Instruct natively supports Hermes-style `<tool_call>` function calling **without fine-tuning**.
+
+**Demo**: `function_calling/demo.py` — defines 3 tools (weather, calculator, database search) and runs multi-turn conversations with tool execution loop.
+
+**Test results** (base model, no LoRA):
+
+| Test | Result |
+|------|:------:|
+| Single tool (weather) | Correct tool + params |
+| Multi-turn (compare two cities) | Sequential calls → comparison |
+| Calculator | Correct expression |
+| Database search | Correct query + formatted output |
+| Email (with param inference) | Auto-generated missing params (to, body) |
+| Calendar event (NL time) | Extracted time from natural language |
+| No-tool query ("what day is it?") | Correctly skipped tools |
+| Parallel multi-tool (email + event) | 2 tool_calls in single response |
+
+**Key findings:**
+- Base model understands the `<tools>` → `<tool_call>` → `<tool_response>` conversation flow natively
+- Parameter extraction works even with ambiguous/missing inputs (model invents reasonable defaults)
+- Parallel tool calling supported (multiple `<tool_call>` blocks in one response)
+- **No LoRA fine-tuning required** — Hermes function calling is built into Qwen2.5's chat template
+
 ## Evaluation Architecture
 
 ```mermaid
