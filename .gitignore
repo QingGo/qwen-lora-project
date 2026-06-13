@@ -14,19 +14,26 @@ models/
 runs/
 
 # ====== Outputs: keep logs/evals/reports, ignore large weights/checkpoints ======
-outputs/*/
+outputs/
 !outputs/*/training_logs/
 !outputs/*/evals/
 !outputs/*/reports/
+!outputs/*/adapters/*.json
+!outputs/*/adapters/*.md
+!outputs/*/adapters/*.jinja
 outputs/*/adapters/**/*.safetensors
 outputs/*/adapters/**/training_args.bin
 outputs/*/adapters/**/tokenizer.json
 outputs/*/adapters/**/tokenizer_config.json
 outputs/*/adapters/checkpoint-*/
 
-# Training data: ignore large train files, keep val
-data/*/train.jsonl
-data/*/train_window.jsonl
+# Training data: ignore large train files, keep val/ref
+data/**/train.jsonl
+data/**/train_window.jsonl
+data/**/window_samples.jsonl
+data/alpaca-gpt4-data-zh/
+data/belle-0.5M/
+data/replay_buffer.jsonl
 
 # Legacy outputs (pre-migration)
 outputs_l2/
@@ -38,6 +45,9 @@ outputs_l5/
 data_l2/
 data_l3/
 data_test/
+
+# Lockfile (auto-generated)
+uv.lock
 
 # Scripts
 run_l4.sh
