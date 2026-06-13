@@ -1,4 +1,5 @@
 import argparse
+import gc
 import json
 import os
 import random
@@ -174,11 +175,14 @@ def generate_sql(model, tokenizer, schema: str, question: str,
         )
     sql = tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True).strip()
     sql = sql.rstrip(tokenizer.eos_token).strip()
+    del inputs, outputs
+    torch.cuda.empty_cache()
     return sql
 
 
-def load_val_samples(n: int = 20):
-    val_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "val.jsonl")
+def load_val_samples(n: int = 20, val_path: str = ""):
+    if not val_path:
+        val_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "val.jsonl")
     records = []
     with open(val_path) as f:
         for line in f:
@@ -277,6 +281,7 @@ def main():
     parser.add_argument("--base_prompt_mode", default="weak",
                         choices=["weak", "strong", "cot"],
                         help="Prompt strategy for base model: weak (original), strong (output-only), cot (CoT + extraction)")
+    parser.add_argument("--val_path", default="", help="Path to validation data (default: data/val.jsonl)")
     parser.add_argument("--output_suffix", default="", help="Suffix for output filename (e.g. '_1024')")
     parser.add_argument("--post_process", action="store_true",
                         help="Post-process SQL: take only the first ;-delimited statement")
@@ -330,19 +335,20 @@ def main():
     output_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..",
                                "outputs", f"text2sql_eval_{args.base_prompt_mode}{suffix}.json")
 
-    val_samples = load_val_samples(args.n_samples)
+    val_samples = load_val_samples(args.n_samples, args.val_path)
     print(f"Loaded {len(val_samples)} validation samples\n")
 
     skipped_questions = set()
     resume_total_old = 0
     resume_base_exec = 0
     resume_lora_exec = 0
+    results = []
     if args.resume:
         if os.path.exists(output_file):
             with open(output_file) as f:
-                old_results = json.load(f)
-            resume_total_old = len(old_results)
-            for r in old_results:
+                results = json.load(f)
+            resume_total_old = len(results)
+            for r in results:
                 skipped_questions.add(r["question"])
                 if r.get("base_valid"):
                     resume_base_exec += 1
@@ -360,6 +366,7 @@ def main():
         args.model_path, torch_dtype=torch.bfloat16, device_map="auto", trust_remote_code=True,
     )
     model = PeftModel.from_pretrained(model, args.adapter_path)
+    model.eval()
 
     def save_results(results):
         with open(output_file, "w", encoding="utf-8") as f:
@@ -371,7 +378,6 @@ def main():
     base_exec_ok = resume_base_exec
     lora_exec_ok = resume_lora_exec
     base_wins = lora_wins = ties = 0
-    results = []
     total = len(val_samples)
     skipped_count = 0
 
@@ -547,7 +553,9 @@ def main():
         results.append(result_entry)
         save_results(results)  # incremental save for resume support
 
-    # Merge with old results for stats
+        gc.collect()
+        torch.cuda.empty_cache()
+
     all_results = results
     if args.resume and os.path.exists(output_file):
         with open(output_file) as f:

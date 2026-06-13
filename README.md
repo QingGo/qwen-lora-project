@@ -288,6 +288,21 @@ Trained with "CRITICAL: Output ONLY raw SQL" system prompt + 1,188 window functi
 
 Automatic noise filtering was added to `prepare_text2sql_data.py`. Training data was regenerated with filtering for 4 types of anomalies. **Exec rate recovered from 87% back to 93%** (Q14 noise fixed). Initial eval_loss 1.05→0.38 (better convergence than L4's 1.12→0.40). Q15 remains the sole failure across 31 samples (97% LoRA exec).
 
+**N=100 Large-Scale Evaluation**
+
+Expanded to 100 random samples from clean val (seed=42) for statistical significance:
+
+| Metric | LoRA | Base |
+|--------|------|------|
+| **Executive Rate** | **72% (72/100)** | 59% (59/100) |
+| Both OK | 51 | - |
+| LoRA-only OK | 21 | - |
+| Base-only OK | 8 | - |
+| Both Failed | 20 | - |
+| **Self-Debug Fixed** | 6/34 (17.6%) | 6/47 (12.8%) |
+
+N=100 is lower than N=15 (93%→72%) due to harder/more diverse schema complexity in the full val set. LoRA outperforms Base by **13pp** (72% vs 59%). Main LoRA failure modes: column hallucination (18 samples), incomplete input (4), table hallucination (3), syntax error (1). Self-Debug is ineffective against column/table hallucination since error feedback lacks schema info.
+
 ### Training Data Quality: Noise Analysis
 
 A comprehensive scan of all 5 datasets (L1 3K, L2 6K, L4 7.2K, val 300, val_l2 600) identified 3 anomaly categories:

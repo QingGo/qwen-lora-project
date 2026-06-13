@@ -1,0 +1,1396 @@
+[
+  {
+    "question": "What are the names of tools associated with each equipment item?",
+    "gold_sql": "SELECT e.item_name, t.tool_name FROM Equipment e LEFT JOIN Tools t ON e.equipment_id = t.tool_id;",
+    "base_sql": "SELECT T1.item_name AS equipment_name, T2.tool_name AS tool_name \nFROM Equipment AS T1 \nJOIN Tools AS T2 ON T1.item_name = T2.tool_na",
+    "lora_sql": "SELECT e.item_name AS equipment_name, t.tool_name FROM Equipment e JOIN ToolEquipment te ON e.equipment_id = te.equipment_id JOIN Tools t ON te.tool_id = t.tool_id",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: T2.tool_na",
+    "base_sd_all_errors": [
+      "no such column: T2.tool_na",
+      "no such column: T2.tool_na"
+    ],
+    "lora_sd_first_error": "no such table: ToolEquipment",
+    "lora_sd_all_errors": [
+      "no such table: ToolEquipment",
+      "no such table: ToolEquipment"
+    ]
+  },
+  {
+    "question": "What is the total count of SMS messages read within 24 hours of being sent?",
+    "gold_sql": "SELECT COUNT(*) AS total_sms_read_within_24h FROM internal_sms WHERE is_read = 'Yes' AND       read_date IS NOT NULL AND       read_date <= datetime(sent_date, '+24 hours');",
+    "base_sql": "SELECT COUNT(*) FROM internal_sms WHERE is_read = 'true' AND sent_date >= NOW() - INTERVAL 1 DAY",
+    "lora_sql": "SELECT COUNT(*) AS total_read_sms FROM internal_sms WHERE is_read = '1' AND julianday(read_date) - julianday(sent_date) <= 1",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 1,
+    "base_sd_first_error": "no such column: HOUR",
+    "base_sd_all_errors": [
+      "no such column: HOUR",
+      "no such function: datediff"
+    ],
+    "lora_sd_first_error": "no such function: DATEDIFF",
+    "lora_sd_all_errors": [
+      "no such function: DATEDIFF"
+    ]
+  },
+  {
+    "question": "List the number of policy exceptions created each month, sorted from most recent to oldest.",
+    "gold_sql": "SELECT      strftime('%Y-%m', datetime(ACCESSDATE/1000, 'unixepoch')) AS month,     COUNT(*) AS exception_count FROM X_PLCYACCESSLOG WHERE ACTIONCODE = 'CREATE' GROUP BY month ORDER BY month DESC;",
+    "base_sql": "SELECT DATEPART(YEAR, STARTDATE) * 100 + DATEPART(MONTH, STARTDATE) AS MonthYear, COUNT(*) AS ExceptionCount \nFROM X_PLCYEXCEPTION \nGROUP BY DATEPART(YEAR, STARTDATE), DATEPART(MONTH, STARTDATE) \nORDER BY MonthYear DESC",
+    "lora_sql": "SELECT      strftime('%Y-%m', STARTDATE) AS month,     COUNT(*) AS exception_count FROM X_PLCYEXCEPTION GROUP BY month ORDER BY month DESC",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: YEAR",
+    "base_sd_all_errors": [
+      "no such column: YEAR",
+      "no such column: YEAR"
+    ]
+  },
+  {
+    "question": "When was the earliest project submission recorded?",
+    "gold_sql": "SELECT MIN(submission_time) FROM javathon_javathon_schema_project;",
+    "base_sql": "SELECT MIN(submission_time) FROM javathon_javathon_schema_project",
+    "lora_sql": "SELECT MIN(submission_time) AS earliest_submission FROM javathon_javathon_schema_project",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the full name of the user who owns the project with the project name \"Solar Panel Installation at Greenfield Park\"?",
+    "gold_sql": "SELECT u.full_name FROM project p JOIN estimator e ON p.e_key = e.e_key JOIN users u ON e.us_key = u.id WHERE p.pp_name = \"Solar Panel Installation at Greenfield Park\";",
+    "base_sql": "SELECT u.full_name FROM users u JOIN estimator e ON u.id = e.us_key JOIN project p ON e.e_key = p.e_key WHERE p.pp_name = 'Solar Panel Installation at Greenfield Park'",
+    "lora_sql": "SELECT u.full_name FROM users u JOIN project p ON u.id = p.pp_owner WHERE p.pp_name = 'Solar Panel Installation at Greenfield Park'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Identify the client with the highest total value of issued boletos that are still unpaid.",
+    "gold_sql": "SELECT c.nome_fantasia, SUM(b.valor_total) AS total_unpaid FROM boleto_bancario b LEFT JOIN recibo_pagamento r ON b.cod_boleto = r.cod_boleto JOIN cliente c ON b.cod_cliente = c.cod_cliente WHERE r.cod_recibo IS NULL GROUP BY c.cod_cliente ORDER BY total_unpaid DESC LIMIT 1;",
+    "base_sql": "SELECT c.cod_cliente, c.nome_fantasia \nFROM boleto_bancario b \nJOIN cliente c ON b.cod_cliente = c.cod_cliente \nWHERE b.situacao = 'unpaid' \nGROUP BY c.cod_cliente, c.nome_fantasia \nORDER BY SUM(b.valor_total) DESC \nLIMIT 1",
+    "lora_sql": "SELECT c.cod_cliente, c.nome_fantasia, SUM(b.valor_total) AS total_issuance FROM boleto_bancario b JOIN cliente c ON b.cod_cliente = c.cod_cliente WHERE b.situacao = 'Pendente' GROUP BY c.cod_cliente ORDER BY total_issuance DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the average risk volatility for portfolios with a tag 'Aggressive' as of 2024-04-10?",
+    "gold_sql": "SELECT AVG(CAST(pr.volatility AS REAL)) AS average_volatility FROM portfolio p JOIN portfolio_tag pt ON p.id = pt.portfolio_id JOIN portfolio_risk pr ON p.id = pr.portfolio_id WHERE pt.tag = 'Aggressive'   AND pr.risk_date = '2024-04-10';",
+    "base_sql": "SELECT AVG(portfolio_risk.volatility) \nFROM portfolio_risk \nJOIN portfolio_tag ON portfolio_risk.portfolio_id = portfolio_tag.portfolio_id \nJOIN portfolio ON portfolio_risk.portfolio_id = portfolio.id \nWHERE portfolio_tag.tag = 'Aggressive' AND portfolio_risk.risk_date <= '2024-04-10' AND portfolio_risk.portfolio_id IN (SELECT portfolio_id FROM portfolio_tag WHERE tag = 'Aggressive')",
+    "lora_sql": "SELECT AVG(pv.volatility) FROM portfolio_risk pv JOIN portfolio_tag pt ON pv.portfolio_id = pt.portfolio_id WHERE pt.tag = 'Aggressive' AND pv.risk_date <= '2024-04-10'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Find the total number of wiki pages created by each user in the 'Project Management' application.",
+    "gold_sql": "SELECT author_id, COUNT(*) AS total_wiki_pages FROM wiki_pages WHERE application_id = (     SELECT id     FROM applications     WHERE name = 'Project Management' ) GROUP BY author_id;",
+    "base_sql": "SELECT u.first_name, u.last_name, COUNT(wp.id) AS wiki_pages_count\nFROM users u\nJOIN wiki_pages wp ON wp.author_id = u.id\nJOIN applications a ON wp.application_id = a.id\nWHERE a.name = 'Project Management'\nGROUP BY u.id",
+    "lora_sql": "SELECT u.id AS user_id, u.first_name || ' ' || u.last_name AS full_name, COUNT(wp.id) AS total_pages FROM users u JOIN user_roles ur ON u.id = ur.user_id JOIN roles r ON ur.role_id = r.id JOIN application_roles ar ON r.id = ar.role_id JOIN applications a ON ar.application_id = a.id JOIN wiki_pages wp ON u.id = wp.author_id WHERE a.name = 'Project Management' GROUP BY u.id",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such column: ar.application_id",
+    "lora_sd_all_errors": [
+      "no such column: ar.application_id",
+      "no such column: ar.application_id"
+    ]
+  },
+  {
+    "question": "What is the average number of patients per doctor who have a gender value of 1?",
+    "gold_sql": "SELECT AVG(patient_count) AS average_patients_per_doctor FROM (     SELECT COUNT(dpm.patient_id) AS patient_count     FROM doctor     LEFT JOIN doctor_patient_mapping dpm ON doctor.doctor_id = dpm.doctor_id     WHERE doctor.gender = 1     GROUP BY doctor.doctor_id );",
+    "base_sql": "SELECT AVG(count_) AS avg_patients_per_doctor FROM (SELECT COUNT(patient_id) AS count_ FROM doctor_patient_mapping WHERE doctor_id IN (SELECT doctor_id FROM doctor WHERE gender = 1) GROUP BY doctor_id) AS subquery",
+    "lora_sql": "SELECT AVG(patient_count) AS average_patients_per_doctor FROM (     SELECT COUNT(*) AS patient_count     FROM doctor_patient_mapping     JOIN doctor ON doctor.doctor_id = doctor_patient_mapping.doctor_id     WHERE doctor.gender = 1     GROUP BY doctor.doctor_id )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which artists have a track that has been awarded in the \"Best Performance\" category and also have a collaboration with at least one other artist?",
+    "gold_sql": "SELECT a.id FROM Artist a JOIN Album al ON a.id = al.artist JOIN Track t ON al.id = t.album JOIN TrackAward ta ON t.id = ta.track JOIN Award award ON ta.award = award.id JOIN ArtistCollaboration ac ON a.id IN (ac.artist1, ac.artist2) WHERE award.category = 'Best Performance' GROUP BY a.id;",
+    "base_sql": "SELECT DISTINCT a.id, a.name \nFROM Artist a\nJOIN TrackAward tw ON a.id = tw.artist\nJOIN Award aw ON tw.award = aw.id\nWHERE aw.category = 'Best Performance'\nAND a.id IN (\n    SELECT artist1 \n    FROM ArtistCollaboration\n    UNION\n    SELECT artist2 \n    FROM ArtistCollaboration\n    WHERE a.id IN (artist1, artist2)\n)",
+    "lora_sql": "SELECT DISTINCT a.id, a.name FROM Artist a WHERE EXISTS (     SELECT 1     FROM Track t     JOIN TrackAward ta ON t.id = ta.track     JOIN Award a2 ON ta.award = a2.id     WHERE a2.category = 'Best Performance' AND t.artist = a.id ) AND EXISTS (     SELECT 1     FROM ArtistCollaboration ac     WHERE ac.artist1 = a.id OR ac.artist2 = a.id )",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: tw.artist",
+    "base_sd_all_errors": [
+      "no such column: tw.artist",
+      "no such column: tw.artist"
+    ],
+    "lora_sd_first_error": "no such column: t.artist",
+    "lora_sd_all_errors": [
+      "no such column: t.artist",
+      "no such column: t.artist"
+    ]
+  },
+  {
+    "question": "What is the total count of items with descriptions shorter than 20 characters?",
+    "gold_sql": "SELECT COUNT(*) FROM item WHERE LENGTH(description) < 20;",
+    "base_sql": "SELECT COUNT(*) FROM item WHERE LENGTH(description) < 20",
+    "lora_sql": "SELECT COUNT(*) FROM item WHERE LENGTH(description) < 20",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the names of all persons who have created at least one piece that is currently displayed in an exposition.",
+    "gold_sql": "SELECT DISTINCT person.name FROM person JOIN piece ON person.cpf = piece.person_cpf JOIN displays ON piece.id = displays.piece_id;",
+    "base_sql": "SELECT p.name FROM person p JOIN creates c ON p.cpf = c.person_cpf JOIN displays d ON c.piece_id = d.piece_id JOIN exposition e ON d.exposition_id = e.id WHERE e.date >= CURRENT_DATE AND e.time >= CURRENT_TIME",
+    "lora_sql": "SELECT DISTINCT p.name FROM person p JOIN creates c ON p.cpf = c.person_cpf JOIN displays d ON c.piece_id = d.piece_id WHERE d.exposition_id IN (     SELECT id      FROM exposition      WHERE date <= CURRENT_DATE AND time <= CURRENT_TIME )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Count the number of post comments that have been reported and received at least one vote.",
+    "gold_sql": "SELECT COUNT(*) FROM (     SELECT comment_id FROM comment_report     INTERSECT     SELECT comment_id FROM comment_votes );",
+    "base_sql": "SELECT COUNT(*) FROM post_comment WHERE id IN (SELECT comment_id FROM comment_report) AND id IN (SELECT comment_id FROM comment_votes)",
+    "lora_sql": "SELECT COUNT(DISTINCT pc.id) FROM post_comment pc JOIN post_report pr ON pc.post_id = pr.post_id JOIN comment_votes cv ON pc.id = cv.comment_id",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the customer names along with their contact information for customers who have a fraudulent account activity reported after January 1, 2023.",
+    "gold_sql": "SELECT D.customername, CC.phone, CC.email FROM FraudReport FR JOIN Depositer D ON FR.accno = D.accno JOIN CustomerContact CC ON D.customername = CC.customername WHERE FR.report_date > '2023-01-01';",
+    "base_sql": "SELECT bc.customername, cc.phone, cc.email \nFROM BankCustomer bc \nJOIN CustomerContact cc ON bc.customername = cc.customername \nJOIN FraudReport fr ON bc.customername = fr.accno \nWHERE fr.report_date > '2023-01-01'",
+    "lora_sql": "SELECT DISTINCT bc.customername, cc.phone, cc.email FROM BankCustomer bc JOIN CustomerContact cc ON bc.customername = cc.customername WHERE bc.customername IN (     SELECT f.accno     FROM FraudReport f     WHERE f.report_date > '2023-01-01' )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "For every bulk_load_partition with more than 10,000 rows, include the job date from bulk_load_job, the associated window_id from data_import_window_stats, and the count of temp_hashed_set_member entries for the job. Filter for partitions created in 2023.",
+    "gold_sql": "SELECT      bj.job_date,     dws.window_id,     (bp.end_row - bp.start_row + 1) AS row_count,     COUNT(thsm.data_order) AS temp_hashed_set_member_count FROM      bulk_load_partition bp JOIN      bulk_load_job bj ON bp.job_id = bj.bulk_load_job_id JOIN      data_import_window_stats dws JOIN      temp_hashed_set_member thsm ON thsm.job = bp.job_id WHERE      strftime('%Y', bj.job_date) = '2023'     AND (bp.end_row - bp.start_row + 1) > 10000 GROUP BY      bp.partition_id;",
+    "base_sql": "SELECT \n    bj.job_date, \n    dis.window_id, \n    COUNT(ts.data_order) AS member_count\nFROM \n    bulk_load_partition bp\nJOIN \n    bulk_load_job bj ON bp.job_id = bj.bulk_load_job_id\nJOIN \n    data_import_window_stats dis ON bp.job_id = dis.window_id\nJOIN \n    temp_hashed_set ts ON bp.job_id = ts.job\nWHERE \n    bp.end_row - bp.start_row > 10000 \n    AND EXTRACT(YEAR FROM bj.job_date) = 2023\nGROUP BY \n    bp.partition_id, \n    bj.job_date, \n    dis.window",
+    "lora_sql": "SELECT      p.partition_id,     j.job_date,     sws.window_id,     COUNT(m.data_order) AS member_count FROM bulk_load_partition p JOIN bulk_load_job j ON p.job_id = j.bulk_load_job_id JOIN data_import_window_stats sws ON p.job_id = sws.window_id LEFT JOIN temp_hashed_set_member m ON p.job_id = m.job GROUP BY p.partition_id, j.job_date, sws.window_id HAVING COUNT(*) > 10000",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 1,
+    "base_sd_first_error": "no such column: ts.value",
+    "base_sd_all_errors": [
+      "no such column: ts.value",
+      "no such function: YEAR"
+    ],
+    "lora_sd_first_error": "no such column: m.member_id",
+    "lora_sd_all_errors": [
+      "no such column: m.member_id"
+    ]
+  },
+  {
+    "question": "Count the number of users who have been blocked by others, received at least one 'system_alert' notification (type=3), logged in using a 'mobile' device, and have a user profile bio longer than 100 characters. Group the result by their account status.",
+    "gold_sql": "SELECT      u.status,      COUNT(DISTINCT u.id) AS blocked_user_count FROM      wjw_user u JOIN      wjw_user_block_list b ON u.id = b.blocked_id JOIN      wjw_user_notification n ON u.id = n.user_id AND n.type = 3 JOIN      wjw_user_login l ON u.id = l.user_id AND l.device = 'mobile' JOIN      wjw_user_profile p ON u.id = p.user_id AND LENGTH(p.bio) > 100 GROUP BY      u.status;",
+    "base_sql": "SELECT wu.status, COUNT(wu.id) \nFROM wjw_user AS wu\nJOIN wjw_user_block_list AS ubl ON wu.id = ubl.blocked_id\nJOIN wjw_user_notification AS un ON wu.id = un.user_id AND un.type = 3\nJOIN wjw_user_login AS ul ON wu.id = ul.user_id AND ul.device = 'mobile'\nJOIN wjw_user_profile AS up ON wu.id = up.user_id AND LENGTH(up.bio) > 100\nGROUP BY wu.status",
+    "lora_sql": "SELECT      u.status AS account_status,     COUNT(DISTINCT u.id) AS blocked_users_count FROM      wjw_user u JOIN      wjw_user_block_list bl ON u.id = bl.blocker_id JOIN      wjw_user_notification n ON u.id = n.user_id AND n.type = 3 JOIN      wjw_user_login l ON u.id = l.user_id AND l.device = 'mobile' JOIN      wjw_user_profile p ON u.id = p.user_id WHERE      LENGTH(p.bio) > 100 GROUP BY      u.status",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which test_data entries have remarks that mention 'urgent' and are associated with a main entry with a specific sort order in the test_tree structure?",
+    "gold_sql": "SELECT test_data.*  FROM test_data JOIN test_data_child ON test_data.id = test_data_child.test_data_main_id JOIN test_tree ON test_tree.id = test_data.id WHERE test_data_child.remarks LIKE '%urgent%'    AND test_tree.sort = 'specific_sort_order';",
+    "base_sql": "SELECT td.* \nFROM test_data td \nJOIN test_data_child tdc ON td.id = tdc.test_data_main_id \nJOIN test_tree tt ON td.id = tt.parent_id \nWHERE td.remarks LIKE '%urgent%' AND tt.sort = 'specific_sort_value'",
+    "lora_sql": "SELECT td.* FROM test_data td JOIN test_data_main tdm ON td.id = tdm.id WHERE td.remarks LIKE '%urgent%'   AND EXISTS (     SELECT 1     FROM test_tree tt     WHERE tt.parent_ids LIKE '%' || CAST(tdm.sort AS TEXT) || '%'   )",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such column: tdm.sort",
+    "lora_sd_all_errors": [
+      "no such column: tdm.sort",
+      "no such column: tdm.sort"
+    ]
+  },
+  {
+    "question": "List all application instances that have at least 3 exposed service resources and 2 backend configurations with 'API_KEY' in their config key. For each, show the count of associated webhook URLs and the number of access rules with 'write' conditions in their relation bindings, requiring joins through backends, event hooks, bindings, and access rules.",
+    "gold_sql": "WITH qualified_app_instances AS (     SELECT applicationinstance_entid     FROM appinstance_exposedServices     GROUP BY applicationinstance_entid     HAVING COUNT(resources_entid) >= 3 ), qualified_backends AS (     SELECT ab.applicationdefinition_entid     FROM applicationdefinition_customBackends ab     JOIN applicationdefinition_customBackends_configVariables abcv         ON ab.applicationdefinition_entid = abcv.applicationdefinition_entid         AND ab.backendmodel_entid = abcv.backendmodel_entid     WHERE abcv.key = 'API_KEY'     GROUP BY ab.applicationdefinition_entid     HAVING COUNT(abcv.entid) >= 2 ), webhook_counts AS (     SELECT eh.applicationdefinition_entid, COUNT(wh.webhook) AS webhook_count     FROM applicationdefinition_eventHooks eh     JOIN applicationdefinition_eventHooks_webhookURLs wh         ON eh.applicationdefinition_entid = wh.applicationdefinition_entid         AND eh.eventmodel_entid = wh.eventmodel_entid     GROUP BY eh.applicationdefinition_entid ), access_rule_counts AS (     SELECT rb.relationbindingmodel_entid, COUNT(*) AS write_condition_count     FROM relationbinding_customAccessRules_conditions rb     WHERE rb.condition = 'write'     GROUP BY rb.relationbindingmodel_entid ) SELECT a.applicationinstance_entid,         COALESCE(w.webhook_count, 0) AS webhook_count,        COALESCE(ar.write_condition_count, 0) AS write_condition_count FROM qualified_app_instances a JOIN applicationinstance_bindings b ON a.applicationinstance_entid = b.applicationinstance_entid JOIN relationbinding_customAccessRules r ON b.bindingmodel_entid = r.relationbindingmodel_entid JOIN access_rule_counts ar ON r.relationbindingmodel_entid = ar.relationbindingmodel_entid JOIN applicationdefinition_customBackends ab ON b.applicationinstance_entid = ab.applicationdefinition_entid JOIN qualified_backends q ON ab.applicationdefinition_entid = q.applicationdefinition_entid LEFT JOIN webhook_counts w ON ab.applicationdefinition_entid = w.applicationdefinition_entid GROUP BY a.applicationinstance_entid, w.webhook_count, ar.write_condition_count HAVING w.webhook_count IS NOT NULL;",
+    "base_sql": "SELECT ai.applicationinstance_entid, COUNT(DISTINCT e.exposedfield_entid) AS exposed_service_count, COUNT(DISTINCT b.backendmodel_entid) AS backend_count, COUNT(DH.webhook) AS webhook_count, COUNT(DR.accessrulemodel_entid) AS access_rule_count\nFROM appinstance_exposedServices aiexs\nJOIN appinstance_bindings ab ON aiexs.applicationinstance_entid = ab.applicationinstance_entid\nJOIN appinstance_bindings_exposedFields e ON ab.applicationinstance_entid = e.applicationinstance_entid AND ab.bindingmodel_entid = e.bindingmodel_entid\nJOIN applicationinstance_relationships ar ON aiexs.applicationinstance_entid = ar.applicationinstance_entid\nJOIN relationbinding_customAccessRules r ON ar.relationshipmodel_entid = r.relationbindingmodel_entid\nJOIN rolebinding_customAccessRules ro ON ar.relationshipmodel_entid = ro.rolebindingmodel_entid\nJOIN applicationdefinition_customBackends acb ON aiexs.applicationinstance_entid = acb.applicationdefinition_entid\nJOIN applicationdefinition_customBackends_configVariables acbv ON acb.backendmodel_entid = acbv.backendmodel_entid AND acbv.key = 'API_KEY'\nJOIN applicationdefinition_eventHooks DH ON aiexs.applicatio",
+    "lora_sql": "WITH qualified_apps AS (     SELECT DISTINCT ai.applicationinstance_entid     FROM appinstance_exposedServices ai     JOIN applicationdefinition_customBackends ab ON ai.applicationinstance_entid = ab.applicationdefinition_entid     JOIN applicationdefinition_customBackends_configVariables acv ON ab.backendmodel_entid = acv.backendmodel_entid     WHERE acv.key = 'API_KEY'     GROUP BY ai.applicationinstance_entid     HAVING COUNT(DISTINCT acv.entid) >= 2 ), app_webhooks AS (     SELECT applicationinstance_entid, COUNT(*) AS webhook_count     FROM applicationinstance_bindings_exposedFields     JOIN applicationinstance_bindings b ON b.applicationinstance_entid = applicationinstance_entid     JOIN applicationinstance_bindings_exposedFields bfe2 ON b.applicationinstance_entid = bfe2.applicationinstance_entid     JOIN applicationinstance_bindings b2 ON bfe2.applicationinstance_entid = b2.applicationinstance_entid     JOIN applicationinstance_bindings_exposedFields bfe3 ON b2.applicationinstance_entid = bfe3.applicationinstance_entid     JOIN applicationinstance_bindings b3 ON bfe3.applicationinstance_entid = b3.applicationinstance_entid     JOIN applicationinstance_bindings_exposedFields bfe4 ON b3.applicationinstance_entid = b",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such table: appinstance_bindings",
+    "base_sd_all_errors": [
+      "no such table: appinstance_bindings",
+      "no such table: appinstance_bindings"
+    ],
+    "lora_sd_first_error": "incomplete input",
+    "lora_sd_all_errors": [
+      "incomplete input",
+      "incomplete input"
+    ]
+  },
+  {
+    "question": "How many people have identification documents in the 45-55 age range?",
+    "gold_sql": "SELECT COUNT(DISTINCT d.idPersona)  FROM DocumentoIdentidad d JOIN RangoEdad r ON d.idRangoEdad = r.id WHERE r.valorMin = '45' AND r.valorMax = '55';",
+    "base_sql": "SELECT COUNT(DISTINCT idPersona) FROM DocumentoIdentidad WHERE idRangoEdad = (SELECT id FROM RangoEdad WHERE valorMin = '45' AND valorMax = '55')",
+    "lora_sql": "SELECT COUNT(*) FROM DocumentoIdentidad d JOIN RangoEdad r ON d.idRangoEdad = r.id WHERE r.valorMin <= '45' AND r.valorMax >= '55'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Retrieve manual tasks that were escalated due to timeout, along with the original assignee's username and the escalation resolution time.",
+    "gold_sql": "SELECT      wne.task_id,     wmnt.task_name,     wu.username,     wnhe.resolved_at FROM      workflow_node_escalation wne JOIN      workflow_node_manual_task wmnt ON wne.task_id = wmnt.id JOIN      workflow_node_manual_task_assignment wnmta ON wmnt.id = wnmta.task_id JOIN      workflow_user wu ON wnmta.assignee_id = wu.id JOIN      workflow_node_escalation_history wnhe ON wne.id = wnhe.escalation_id WHERE      wne.escalation_type = 'manual_task_timeout';",
+    "base_sql": "SELECT mt.id AS task_id, u.username, ne.escalation_type, ne.escalated_at, ne.resolved_at \nFROM workflow_node_manual_task mt \nJOIN workflow_node_manual_task_assignment mta ON mt.id = mta.task_id \nJOIN workflow_node_escalation ne ON mta.task_id = ne.task_id \nJOIN workflow_user u ON mta.assignee_id = u.id \nWHERE ne.escalation_type = 'timeout'",
+    "lora_sql": "SELECT      mta.task_id,     u.username AS assignee_username,     eh.resolved_at AS escalation_resolution_time FROM workflow_node_manual_task mta JOIN workflow_node_escalation e ON mta.id = e.task_id JOIN workflow_node_manual_task_assignment mtaa ON mta.id = mtaa.task_id JOIN workflow_user u ON mtaa.assignee_id = u.id JOIN workflow_node_escalation_history eh ON e.id = eh.escalation_id WHERE e.timeout_minutes IS NOT NULL",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: mt.task_id",
+    "base_sd_all_errors": [
+      "no such column: mt.task_id",
+      "no such column: ne.escalated_at"
+    ],
+    "lora_sd_first_error": "no such column: mta.task_id",
+    "lora_sd_all_errors": [
+      "no such column: mta.task_id",
+      "no such column: mta.task_id"
+    ]
+  },
+  {
+    "question": "List all customers who have not made any return requests.",
+    "gold_sql": "SELECT c.id, c.full_name, c.email, c.phone  FROM customers c  WHERE NOT EXISTS (     SELECT 1      FROM return_items ri      JOIN order_items oi ON ri.item_id = oi.inventory_id      JOIN orders o ON oi.order_id = o.id      WHERE o.customer_id = c.id );",
+    "base_sql": "SELECT full_name FROM customers WHERE id NOT IN (SELECT return_request_id FROM return_items)",
+    "lora_sql": "SELECT DISTINCT c.id, c.full_name FROM customers c LEFT JOIN return_items ri ON c.id = ri.return_request_id WHERE ri.id IS NULL",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 1,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such table: return_requests",
+    "base_sd_all_errors": [
+      "no such table: return_requests"
+    ]
+  },
+  {
+    "question": "List the courses that have the highest number of prerequisite requirements.",
+    "gold_sql": "WITH PrereqCounts AS (     SELECT Course_ID, COUNT(Prereq_Course_ID) AS num_prereqs     FROM prerequisite     GROUP BY Course_ID ), MaxCount AS (     SELECT MAX(num_prereqs) AS max_count     FROM PrereqCounts ) SELECT c.Course_ID, c.Course_Title FROM PrereqCounts pc JOIN course c ON pc.Course_ID = c.Course_ID JOIN MaxCount mc ON pc.num_prereqs = mc.max_count;",
+    "base_sql": "SELECT Course_ID FROM prerequisite GROUP BY Course_ID ORDER BY COUNT(Prereq_Course_ID) DESC LIMIT 1",
+    "lora_sql": "SELECT c.Course_ID, c.Course_Title FROM course c JOIN prerequisite p ON c.Course_ID = p.Course_ID GROUP BY c.Course_ID, c.Course_Title ORDER BY COUNT(*) DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List all blog posts that have the tag 'technology' and were created by users with the role 'admin'.",
+    "gold_sql": "SELECT blog.*  FROM blog JOIN blog_tags ON blog.id = blog_tags.blog_id JOIN tags ON blog_tags.tag_id = tags.id JOIN user_favorites_blog ON blog.id = user_favorites_blog.blog_id JOIN users ON user_favorites_blog.user_id = users.id JOIN user_roles ON users.id = user_roles.user_id JOIN roles ON user_roles.role_id = roles.id WHERE tags.name = 'technology' AND roles.name = 'admin';",
+    "base_sql": "SELECT b.id, b.title, b.text \nFROM blog b\nJOIN blog_tags bt ON b.id = bt.blog_id\nJOIN tags t ON bt.tag_id = t.id\nJOIN user_favorites_blog ufb ON b.id = ufb.blog_id\nJOIN users u ON ufb.user_id = u.id\nJOIN user_roles ur ON u.id = ur.user_id\nJOIN roles r ON ur.role_id = r.id\nWHERE t.name = 'technology' AND r.name = 'admin'",
+    "lora_sql": "SELECT b.id, b.title FROM blog b JOIN blog_tags bt ON b.id = bt.blog_id JOIN tags t ON bt.tag_id = t.id WHERE t.name = 'technology' AND EXISTS (     SELECT 1     FROM user_roles ur     JOIN roles r ON ur.role_id = r.id     WHERE ur.user_id = b.id       AND r.name = 'admin' )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 1,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: b.user_id",
+    "base_sd_all_errors": [
+      "no such column: b.user_id"
+    ]
+  },
+  {
+    "question": "What is the total count of mitzvot associated with each unique mitzvahId in the zoharHaRakiah table?",
+    "gold_sql": "SELECT mitzvahId, COUNT(*) AS total FROM zoharHaRakiah GROUP BY mitzvahId;",
+    "base_sql": "SELECT mitzvahId, COUNT(*) FROM zoharHaRakiah GROUP BY mitzvahI",
+    "lora_sql": "SELECT mitzvahId, COUNT(*) AS total_mitzvot FROM zoharHaRakiah GROUP BY mitzvahId",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: mitzvahI",
+    "base_sd_all_errors": [
+      "no such column: mitzvahI",
+      "no such column: mitzvahI"
+    ]
+  },
+  {
+    "question": "What is the total number of factories in regions with a population density above 850 inhabitants per square kilometer, where each region must have at least two rivers longer than 650 kilometers and the factories are located in departments whose names contain the letter 'l' and belong to the aerospace sector?",
+    "gold_sql": "SELECT COUNT(*)  FROM usine JOIN departement ON usine.nom_region = departement.nom_region JOIN region ON usine.nom_region = region.nom_region WHERE departement.nom_departement LIKE '%l%' AND usine.secteur = 'aerospace' AND region.nb_habitants > 850 AND (     SELECT COUNT(*)      FROM fleuve     WHERE longueur > 650 ) >= 2;",
+    "base_sql": "SELECT COUNT(*)\nFROM usine u\nJOIN region r ON u.nom_region = r.nom_region\nWHERE r.nb_habitants / 10000 > 850\nAND u.nom_region IN (\n    SELECT nom_region \n    FROM usine \n    GROUP BY nom_region \n    HAVING COUNT(*) >= 2\n)\nAND u.secteur = 'aerospace'\nAND u.nom_departement LIKE '%l%'",
+    "lora_sql": "SELECT COUNT(*) AS total_factories FROM usine u WHERE u.nom_region IN (     SELECT r.nom_region     FROM region r     JOIN fleuve f ON r.nom_region = f.nom_fleuve     GROUP BY r.nom_region     HAVING COUNT(f.nom_fleuve) >= 2       AND SUM(CASE WHEN f.longueur > 650 THEN 1 ELSE 0 END) >= 2 ) AND u.secteur = 'aerospace' AND u.nom_departement IN (     SELECT d.num_departement     FROM departement d     WHERE d.nom_departement LIKE '%l%' )",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: nom_departement",
+    "base_sd_all_errors": [
+      "no such column: nom_departement",
+      "no such column: u.nom_departement"
+    ],
+    "lora_sd_first_error": "no such column: nom_departement",
+    "lora_sd_all_errors": [
+      "no such column: nom_departement",
+      "no such column: u.nom_departement"
+    ]
+  },
+  {
+    "question": "Identify the events where the top three podium finishers in a race all came from different teams and had an average age above 25.",
+    "gold_sql": "SELECT DISTINCT evento_id FROM (     SELECT p.evento_id, p.prova_id     FROM podium p     JOIN piloto pi ON p.evento_id = pi.evento_id AND p.piloto_id = pi.piloto_id     WHERE p.posicao IN (1, 2, 3)     GROUP BY p.evento_id, p.prova_id     HAVING COUNT(*) = 3         AND COUNT(DISTINCT p.equipe_id) = 3         AND AVG(pi.idade) > 25 );",
+    "base_sql": "SELECT e.evento_id \nFROM evento e\nJOIN podium p1 ON e.evento_id = p1.evento_id\nJOIN podium p2 ON e.evento_id = p2.evento_id AND p1.prova_id = p2.prova_id AND p1.posicao < p2.posicao\nJOIN podium p3 ON e.evento_id = p3.evento_id AND p1.prova_id = p3.prova_id AND p1.posicao < p3.posicao AND p2.posicao < p3.posicao\nJOIN piloto pi1 ON p1.piloto_id = pi1.piloto_id AND pi1.evento_id = e.evento_id\nJOIN piloto pi2 ON p2.piloto_id = pi2.piloto_id AND pi2.evento_id = e.evento_id\nJOIN piloto pi3 ON p3.piloto_id = pi3.piloto_id AND pi3.evento_id = e.evento_id\nWHERE pi1.equipe_id != pi2.equipe_id AND pi2.equipe_id != pi3.equipe_id AND pi1.equipe_id != pi3.equipe_id\nGROUP BY e.evento_id\nHAVING AVG(pi1.ida",
+    "lora_sql": "WITH podium_ages AS (     SELECT          evento_id,         prova_id,         equipe_id,         AVG(CAST(piloto.idade AS INTEGER)) AS avg_age     FROM podium     JOIN piloto ON podium.piloto_id = piloto.piloto_id     GROUP BY evento_id, prova_id, equipe_id ), qualified_podiums AS (     SELECT          evento_id,         prova_id     FROM podium_ages     WHERE avg_age > 25 ), team_counts AS (     SELECT          evento_id,         prova_id,         COUNT(DISTINCT equipe_id) AS num_teams     FROM podium     GROUP BY evento_id, prova_id ) SELECT      qp.evento_id,     qp.prova_id FROM qualified_podiums qp JOIN team_counts tc ON qp.evento_id = tc.evento_id AND qp.prova_id = tc.prova_id WHERE tc.num_teams >= 3",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "incomplete input",
+    "base_sd_all_errors": [
+      "incomplete input",
+      "incomplete input"
+    ],
+    "lora_sd_first_error": "ambiguous column name: evento_id",
+    "lora_sd_all_errors": [
+      "ambiguous column name: evento_id",
+      "ambiguous column name: evento_id"
+    ]
+  },
+  {
+    "question": "Show the names of the primary menus and the number of menu items in each.",
+    "gold_sql": "SELECT m.name, COUNT(mi.id) AS itemCount FROM menu m JOIN menu_item mi ON m.id = mi.menuId WHERE m.isPrimary = 1 GROUP BY m.id;",
+    "base_sql": "SELECT m.name, COUNT(mi.id) AS num_menu_items \nFROM menu m \nJOIN menu_item mi ON m.id = mi.menuId \nWHERE m.isPrimary = 1 \nGROUP BY m.name",
+    "lora_sql": "SELECT m.name, COUNT(mi.id) AS item_count FROM menu m JOIN menu_item mi ON m.id = mi.menuId WHERE m.isPrimary = 1 GROUP BY m.id",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the number of unique devices used by users who have both a 'Premium' pricing plan and have at least one API key registered.",
+    "gold_sql": "SELECT COUNT(DISTINCT DP.DEVICE_ID) FROM DEVICE_PROFILES DP WHERE EXISTS (     SELECT 1     FROM API_KEYS AK     WHERE AK.USER_ID = DP.USER_ID ) AND EXISTS (     SELECT 1     FROM INVOICE_RECORDS IR     JOIN PRICING_PLANS PP ON IR.PLAN_ID = PP.PLAN_ID     WHERE PP.PLAN_NAME = 'Premium'     AND IR.USER_ID = DP.USER_ID );",
+    "base_sql": "SELECT COUNT(DISTINCT d.DEVICE_ID) \nFROM DEVICE_PROFILES d\nJOIN INVOICE_RECORDS ir ON d.USER_ID = ir.USER_ID\nJOIN PRICING_PLANS p ON ir.PLAN_ID = p.PLAN_ID\nJOIN API_KEYS ak ON d.USER_ID = ak.USER_ID\nWHERE p.PLAN_NAME = 'Premium'",
+    "lora_sql": "SELECT COUNT(DISTINCT dp.DEVICE_ID) FROM DEVICE_PROFILES dp JOIN USERS u ON dp.USER_ID = u.ID WHERE u.ID IN (     SELECT i.USER_ID     FROM INVOICE_RECORDS i     JOIN PRICING_PLANS p ON i.PLAN_ID = p.PLAN_ID     WHERE p.PLAN_NAME = 'Premium' ) AND dp.USER_ID IN (     SELECT a.USER_ID     FROM API_KEYS a )",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such table: USERS",
+    "lora_sd_all_errors": [
+      "no such table: USERS",
+      "no such table: USERS"
+    ]
+  },
+  {
+    "question": "the entire schema is above",
+    "gold_sql": "SELECT COUNT(*) FROM aa_tbl WHERE rating > 4;",
+    "base_sql": "SELECT * FROM a_tbl",
+    "lora_sql": "SELECT * FROM a_tbl",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the average session number for projects in the public_projects table?",
+    "gold_sql": "SELECT AVG(session) FROM public_projects;",
+    "base_sql": "SELECT AVG(session) FROM public_projects",
+    "lora_sql": "SELECT AVG(session) FROM public_projects",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What are the names of the genres associated with movies that have at least one rating of 5 stars?",
+    "gold_sql": "SELECT DISTINCT gc.genreName FROM GenreCategory gc JOIN MovieGenre mg ON gc.genreID = mg.genreID JOIN Rating r ON mg.mID_ = r.mID_ WHERE r.stars = 5;",
+    "base_sql": "SELECT DISTINCT T3.genreName FROM Rating AS T1 JOIN MovieGenre AS T2 ON T1.mID_ = T2.mID_ JOIN GenreCategory AS T3 ON T2.genreID = T3.genreID WHERE T1.stars = 5",
+    "lora_sql": "SELECT DISTINCT GenreCategory.genreName FROM GenreCategory JOIN MovieGenre ON GenreCategory.genreID = MovieGenre.genreID WHERE MovieGenre.mID_ IN (     SELECT mID_     FROM Rating     WHERE stars = 5 )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the names of users who have the same job title as the user with the highest number of notifications.",
+    "gold_sql": "SELECT u.nome FROM tbl_cargos_usuarios cu JOIN tbl_usuarios u ON cu.idUsuario = u.id WHERE cu.idCargo IN (     SELECT idCargo     FROM tbl_cargos_usuarios     WHERE idUsuario IN (         SELECT idUsuario         FROM tbl_usuario_notificacoes         GROUP BY idUsuario         HAVING COUNT(*) = (             SELECT MAX(cnt)             FROM (                 SELECT COUNT(*) AS cnt                 FROM tbl_usuario_notificacoes                 GROUP BY idUsuario             ) AS sub         )     ) );",
+    "base_sql": "SELECT u.nome \nFROM tbl_usuarios u\nJOIN tbl_usuario_notificacoes un ON u.id = un.idUsuario\nWHERE un.idUsuario <> (\n    SELECT idUsuario \n    FROM tbl_usuario_notificacoes \n    GROUP BY idUsuario \n    ORDER BY COUNT(*) DESC \n    LIMIT 1\n)\nAND u.profissao = (\n    SELECT u2.profissao \n    FROM tbl_usuarios u2\n    WHERE u2.id = (\n        SELECT idUsuario \n        FROM tbl_usuario_notificacoes \n        GROUP BY idUsuario \n        ORDER BY COUNT(*) DESC \n        LIMIT 1\n    )\n)",
+    "lora_sql": "WITH max_notifications AS (     SELECT COUNT(*) AS max_count     FROM tbl_usuario_notificacoes ), top_user_id AS (     SELECT idUsuario     FROM tbl_usuario_notificacoes     GROUP BY idUsuario     ORDER BY COUNT(id) DESC     LIMIT 1 ) SELECT u.nome FROM tbl_usuarios u JOIN tbl_usuario_estados ue ON u.id = ue.idUsuario WHERE ue.nome = (     SELECT ue2.nome     FROM tbl_usuario_notificacoes n     JOIN tbl_usuarios u2 ON n.idUsuario = u2.id     JOIN tbl_usuario_estados ue2 ON u2.id = ue2.idUsuario     GROUP BY n.idUsuario     ORDER BY COUNT(n.id) DESC     LIMIT 1 )",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: u.profissao",
+    "base_sd_all_errors": [
+      "no such column: u.profissao",
+      "no such column: u.profissao"
+    ],
+    "lora_sd_first_error": "no such column: n.nome",
+    "lora_sd_all_errors": [
+      "no such column: n.nome",
+      "no such column: ue2.idUsuario"
+    ]
+  },
+  {
+    "question": "What is the total payment amount for each role held by parties in contracts signed in the last fiscal year?",
+    "gold_sql": "SELECT      ctp.role,      SUM(CAST(cp.amount AS REAL)) AS total_amount FROM      contract_payments cp JOIN      contract_parties ctp ON cp.contract_id = ctp.contract_id JOIN      audit_logs al ON cp.contract_id = al.contract_id WHERE      al.action = 'Contract Signed'     AND al.action_date >= '2022-04-01'     AND al.action_date <= '2023-03-31' GROUP BY      ctp.role;",
+    "base_sql": "SELECT cp.role, SUM(cf.amount) AS total_payment\nFROM contract_parties cp\nJOIN financial_records cf ON cp.contract_id = cf.contract_id\nWHERE cp.contract_id IN (\n    SELECT contract_id\n    FROM contract_reviews\n    WHERE date_reviewed >= DATE_TRUNC('year', NOW()) - INTERVAL '1 year'\n)\nGROUP BY cp.rol",
+    "lora_sql": "SELECT      cp.role,     SUM(CAST(fr.amount AS REAL)) AS total_payment FROM      contract_parties cp JOIN      contract_payment_terms cpt ON cp.contract_id = cpt.contract_id JOIN      financial_records fr ON cp.contract_id = fr.contract_id WHERE      cp.contract_id IN (         SELECT              contract_id         FROM              contract_parties         WHERE              role IS NOT NULL         GROUP BY              contract_id     )     AND fr.date >= '2023-04-01'     AND fr.date < '2024-04-01' GROUP BY      cp.role",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 1,
+    "base_sd_first_error": "near \"'1 year'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'1 year'\": syntax error",
+      "near \"'1 year'\": syntax error"
+    ],
+    "lora_sd_first_error": "no such column: cp.amount",
+    "lora_sd_all_errors": [
+      "no such column: cp.amount"
+    ]
+  },
+  {
+    "question": "List the number of photos taken with a camera model containing the word \"Mirrorless\".",
+    "gold_sql": "SELECT COUNT(*)  FROM photo  JOIN photo_metadata ON photo.id = photo_metadata.photo_id  WHERE photo_metadata.camera_model LIKE '%Mirrorless%';",
+    "base_sql": "SELECT COUNT(*) FROM photo_metadata WHERE camera_model LIKE '%Mirrorless%'",
+    "lora_sql": "SELECT COUNT(*) FROM photo_metadata WHERE camera_model LIKE '%Mirrorless%'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Let me brainstorm some questions. They need to be realistic and not reference specific column names directly. For example, instead of \"get the user's name\", maybe \"What are the emails of users who have a cash in transaction for a cryptocurrency?\"",
+    "gold_sql": "SELECT a.name  FROM assets a  JOIN cash_transfers ct ON a.id = ct.asset_id  LEFT JOIN balance_history bh ON ct.balance_update_id = bh.id  WHERE bh.id IS NULL;",
+    "base_sql": "SELECT U.email \nFROM users U \nJOIN cash_ins CI ON U.id = CI.account_id \nJOIN assets A ON CI.asset_id = A.id \nWHERE A.name LIKE '%cryptocurrency%'",
+    "lora_sql": "SELECT u.email FROM users u JOIN accounts a ON u.id = a.user_id JOIN cash_ins ci ON a.id = ci.account_id JOIN assets aset ON ci.asset_id = aset.id WHERE aset.numeric_code > 0",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "For each 'like' in t6, count how many times it appears in both t6 and t7.",
+    "gold_sql": "SELECT t6.like,         (SELECT COUNT(*) FROM t6 AS t6_sub WHERE t6_sub.like = t6.like) AS count_t6,        (SELECT COUNT(*) FROM t7 AS t7_sub WHERE t7_sub.like = t6.like) AS count_t7 FROM t6 WHERE EXISTS (SELECT 1 FROM t7 WHERE t7.like = t6.like) GROUP BY t6.like;",
+    "base_sql": "SELECT t6.like, COUNT(*) \nFROM t6 \nJOIN t7 ON t6.like = t7.like \nGROUP BY t6.lik",
+    "lora_sql": "SELECT t6.\"like\", COUNT(*) AS count FROM t6 JOIN t7 ON t6.\"like\" = t7.\"like\" GROUP BY t6.\"like\"",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: t6.lik",
+    "base_sd_all_errors": [
+      "no such column: t6.lik",
+      "no such column: t6.lik"
+    ]
+  },
+  {
+    "question": "What is the average value of the \"cpu_usage\" metric recorded for projects that have at least one security policy with the status \"failed\" in the last week?",
+    "gold_sql": "SELECT AVG(m.value) AS average_cpu_usage FROM monitoring_Metric m JOIN (     SELECT DISTINCT p.projectId     FROM security_Policy p     JOIN security_Audit a ON p.id = a.policyId     WHERE a.status = 'failed'       AND a.executedAt >= DATE('now', '-7 days') ) failed_projects ON m.projectId = failed_projects.projectId WHERE m.name = 'cpu_usage';",
+    "base_sql": "SELECT AVG(value) \nFROM monitoring_Metric \nWHERE name = 'cpu_usage' \nAND projectId IN (SELECT projectId FROM security_Policy WHERE status = 'failed' AND executedAt >= NOW() - INTERVAL '1 week') \nAND timestamp >= NOW() - INTERVAL '1 week'",
+    "lora_sql": "SELECT AVG(value) AS average_cpu_usage FROM monitoring_Metric WHERE name = 'cpu_usage'   AND projectId IN (     SELECT DISTINCT p.id     FROM security_Policy sp     JOIN management_Project p ON p.id = sp.projectId     WHERE sp.status = 'failed'       AND EXISTS (         SELECT 1         FROM management_AuditLog al         WHERE al.projectId = p.id           AND al.action = 'apply_security_policy'           AND al.timestamp >= datetime('now', '-7 days')       )   )",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "near \"'1 week'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'1 week'\": syntax error",
+      "near \"'1 week'\": syntax error"
+    ],
+    "lora_sd_first_error": "no such column: status",
+    "lora_sd_all_errors": [
+      "no such column: status",
+      "no such column: sp.status"
+    ]
+  },
+  {
+    "question": "List the top 5 artifacts used by clients with a last version string newer than 'v2.1.0', where the artifact was approved within the last year by at least two different approvers and the client's last ping was within the last 7 days?",
+    "gold_sql": "WITH approved_artifacts AS (     SELECT artifact_name     FROM artifact_approvals     WHERE approval_time >= datetime('now', '-365 days')     GROUP BY artifact_name     HAVING COUNT(DISTINCT approver) >= 2 ), qualified_clients AS (     SELECT c.client_id     FROM clients c     JOIN (         SELECT client_id, new_value         FROM client_history         WHERE field = 'version'         AND update_timestamp = (             SELECT MAX(update_timestamp)             FROM client_history ch2             WHERE ch2.client_id = client_history.client_id             AND field = 'version'         )         AND new_value > 'v2.1.0'     ) AS cv ON c.client_id = cv.client_id     WHERE c.last_ping >= datetime('now', '-7 days') ) SELECT a.artifact_name, COUNT(*) AS usage_count FROM artifact_uses a JOIN approved_artifacts ap ON a.artifact_name = ap.artifact_name JOIN qualified_clients qc ON a.client_id = qc.client_id GROUP BY a.artifact_name ORDER BY usage_count DESC LIMIT 5;",
+    "base_sql": "SELECT a.name, COUNT(*) as usage_count \nFROM artifacts a\nJOIN artifact_uses au ON a.name = au.artifact_name\nJOIN clients c ON au.client_id = c.client_id\nJOIN artifact_approvals aa ON a.name = aa.artifact_name\nWHERE a.name IN (\n    SELECT artifact_name \n    FROM artifact_approvals \n    WHERE approval_time >= NOW() - INTERVAL '1' YEAR \n    GROUP BY artifact_name\n    HAVING COUNT(DISTINCT approver) >= 2\n)\nAND c.last_version_string > 'v2.1.0'\nAND c.last_ping >= NOW() - INTERVAL '7' DAY\nGROUP BY a.name\nORDER BY usage_count DESC\nLIMIT 5",
+    "lora_sql": "WITH qualified_artifacts AS (     SELECT          av.artifact_name,         COUNT(DISTINCT ar.approver) AS unique_approvers_count     FROM artifact_versions av     JOIN artifact_uses au ON av.artifact_name = au.artifact_name     JOIN artifact_approvals aa ON av.artifact_name = aa.artifact_name     JOIN clients c ON au.client_id = c.client_id     JOIN client_labels cl ON au.client_id = cl.client_id AND cl.label = 'last_version_string'     JOIN client_labels cl2 ON au.client_id = cl2.client_id AND cl2.label = 'newer_than_v2.1.0'     JOIN client_labels cl3 ON au.client_id = cl3.client_id AND cl3.label = 'last_ping_within_7_days'     JOIN artifact_approvals ar ON av.artifact_name = ar.artifact_name     WHERE c.last_version_string > 'v2.1.0'       AND ar.approval_time >= date('now', '-1 year')     GROUP BY av.artifact_name     HAVING unique_approvers_count >= 2 ), ranked_artifacts AS (     SELECT          qa.artifact_name,         COUNT(*) OVER (PARTITION BY qa.artifact_name) AS usage_count,         ROW",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "near \"'1 YEAR'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'1 YEAR'\": syntax error",
+      "near \"'1 YEAR'\": syntax error"
+    ],
+    "lora_sd_first_error": "incomplete input",
+    "lora_sd_all_errors": [
+      "incomplete input",
+      "incomplete input"
+    ]
+  },
+  {
+    "question": "How many officers have an active equipment assignment and have sent messages in the \"Operations\" channel but have not been assigned the \"Security Lead\" role?",
+    "gold_sql": "SELECT COUNT(DISTINCT e.officer_id) FROM EquipmentAssignments e INNER JOIN MessageActivityLog m ON e.officer_id = m.officer_id WHERE e.returned_date IS NULL   AND m.channel_id = 'Operations'   AND e.officer_id NOT IN (       SELECT officer_id FROM OfficerRoles WHERE role_name = 'Security Lead'   );",
+    "base_sql": "SELECT COUNT(DISTINCT o.officer_id) \nFROM Officers o\nJOIN EquipmentAssignments ea ON o.officer_id = ea.officer_id\nJOIN MessageActivityLog mal ON o.officer_id = mal.officer_id\nWHERE mal.channel_id = 'Operations'\nAND o.officer_id NOT IN (SELECT officer_id FROM OfficerRoles WHERE role_name = 'Security Lead')",
+    "lora_sql": "SELECT COUNT(DISTINCT e.officer_id) FROM EquipmentAssignments e JOIN MessageActivityLog m ON e.officer_id = m.officer_id WHERE e.returned_date IS NULL   AND m.channel_id = 'Operations'   AND NOT EXISTS (       SELECT 1       FROM OfficerRoles r       WHERE r.officer_id = e.officer_id         AND r.role_name = 'Security Lead'   )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "How many query results have been marked as 'Completed' for each combination of source device and destination pool, and what is the average number of query items per query that resulted in at least one completed query result? Additionally, provide the total number of unique patients involved in these completed query results, categorized by their anonymized ID and birth date ranges.",
+    "gold_sql": "WITH CompletedQueries AS (     SELECT          Q.DeviceKey,         Q.DestinationPoolKey,         QI.QueryItemKey     FROM QUERY Q     JOIN QUERYITEM QI ON Q.QueryKey = QI.QueryKey     JOIN QUERYRESULT QR ON QI.QueryItemKey = QR.QueryItemKey     WHERE QR.Status = 'Completed' ), QueryStats AS (     SELECT          AVG(ItemCount) AS AvgItemsPerQuery     FROM (         SELECT              COUNT(QI2.QueryItemKey) AS ItemCount         FROM QUERY Q2         JOIN QUERYITEM QI2 ON Q2.QueryKey = QI2.QueryKey         WHERE Q2.QueryKey IN (             SELECT DISTINCT Q3.QueryKey             FROM QUERY Q3             JOIN QUERYITEM QI3 ON Q3.QueryKey = QI3.QueryKey             JOIN QUERYRESULT QR3 ON QI3.QueryItemKey = QR3.QueryItemKey             WHERE QR3.Status = 'Completed'         )         GROUP BY Q2.QueryKey     ) ), UniquePatients AS (     SELECT          QI.PatientID,         QI.PatientBirthDate     FROM QUERY Q     JOIN QUERYITEM QI ON Q.QueryKey = QI.QueryKey     JOIN QUERYRESULT QR ON QI.QueryItemKey = QR.QueryItemKey     WHERE QR.Status = 'Completed'     GROUP BY QI.PatientID, QI.PatientBirthDate ) SELECT      C.DeviceKey,     C.DestinationPoolKey,     COUNT(*) AS CompletedCount,     (SELECT AvgItemsPerQuery FROM QueryStats) AS AvgItemsPerQuery,     (SELECT COUNT(*) FROM UniquePatients) AS UniquePatientCount,     P.PatientID,     P.PatientBirthDate FROM CompletedQueries C JOIN UniquePatients P ON 1=1 GROUP BY C.DeviceKey, C.DestinationPoolKey, P.PatientID, P.PatientBirthDate;",
+    "base_sql": "SELECT \n    q.DeviceKey, \n    q.DestinationPoolKey, \n    COUNT(qr.QueryResultKey) AS CompletedQueryResults,\n    AVG(COUNT(qi.QueryItemKey)) OVER (PARTITION BY q.QueryKey) AS AvgQueryItemsPerQuery,\n    COUNT(DISTINCT qr.AnonymizedID) AS UniquePatients,\n    SUM(CASE WHEN qr.PatientBirthDate BETWEEN '1900-01-01' AND '1920-12-31' THEN 1 ELSE 0 END) AS BirthDate_1900_1920,\n    SUM(CASE WHEN qr.PatientBirthDate BETWEEN '1921-01-01' AND '1940-12-31' THEN 1 ELSE 0 END) AS BirthDate_1921_1940,\n    SUM(CASE WHEN qr.PatientBirthDate BETWEEN '1941-01-01' AND '1960-12-31' THEN 1 ELSE 0 END) AS BirthDate_1941_1960\nFROM \n    QUERY q\nJOIN \n    QUERYITEM qi ON q",
+    "lora_sql": "WITH CompletedQueries AS (     SELECT          q.QueryKey,         q.PoolKey AS SourceDevice,         q.DestinationPoolKey AS DestinationPool,         COUNT(qr.QueryResultKey) AS CompletedCount     FROM QUERY q     JOIN QUERYITEM qi ON q.QueryKey = qi.QueryKey     JOIN QUERYRESULT qr ON qi.QueryItemKey = qr.QueryItemKey     WHERE qr.Status = 'Completed'     GROUP BY q.QueryKey, q.PoolKey, q.DestinationPoolKey ), QueryItemCounts AS (     SELECT          cq.SourceDevice,         cq.DestinationPool,         AVG(cq.CompletedCount) AS AvgItemsPerQuery     FROM CompletedQueries cq     GROUP BY cq.SourceDevice, cq.DestinationPool ), PatientStats AS (     SELECT          qr.PatientID,         qr.PatientBirthDate,         COUNT(DISTINCT qr.QueryResultKey) AS UniquePatients     FROM QUERYRESULT qr     WHERE qr.Status = 'Completed'     GROUP BY qr.PatientID, qr.PatientBirthDate ) SELECT      cq.SourceDevice,     cq.DestinationPool,     cq.CompletedCount,     qic.AvgItemsPerQuery,     ps.UniquePatients FROM CompletedQueries cq JOIN QueryItemCounts qic ON cq.SourceDevice = qic.SourceDevice AND cq.DestinationPool = q",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "unrecognized token: \"```sql\nSELECT \n    q.DeviceKey, \n    q.DestinationPoolKey, \n    COUNT(qr.QueryResultKey) AS CompletedQueryResults,\n    AVG(COUNT(qi.QueryItemKey)) OVER (PARTITION BY q.QueryKey) A",
+    "base_sd_all_errors": [
+      "unrecognized token: \"```sql\nSELECT \n    q.DeviceKey, \n    q.DestinationPoolKey, \n    COUNT(qr.QueryResultKey) AS CompletedQueryResults,\n    AVG(COUNT(qi.QueryItemKey)) OVER (PARTITION BY q.QueryKey) A",
+      "no such column: qr.QueryResultKey"
+    ],
+    "lora_sd_first_error": "no such column: p.UniquePatients",
+    "lora_sd_all_errors": [
+      "no such column: p.UniquePatients",
+      "no such column: ps.UniquePatients"
+    ]
+  },
+  {
+    "question": "Show the top 5 most frequently used apps based on total usage time across all users.",
+    "gold_sql": "SELECT app_package_name, SUM(usage_time_sec) AS total_usage_time FROM app_usage_stats GROUP BY app_package_name ORDER BY total_usage_time DESC LIMIT 5;",
+    "base_sql": "SELECT app_package_name, SUM(usage_time_sec) AS total_usage_time FROM app_usage_stats GROUP BY app_package_name ORDER BY total_usage_time DESC LIMIT 5",
+    "lora_sql": "SELECT      app_package_name,     SUM(usage_time_sec) AS total_usage_time FROM      app_usage_stats GROUP BY      app_package_name ORDER BY      total_usage_time DESC LIMIT 5",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "For each client with at least one required action, how many active protocol sessions are currently open?",
+    "gold_sql": "SELECT CLIENT_ID, active_protocol_sessions FROM (     SELECT car.CLIENT_ID,            COUNT(pps.ID) OVER (PARTITION BY car.CLIENT_ID) AS active_protocol_sessions     FROM public_CLIENT_REQUIRED_ACTIONS car     LEFT JOIN public_CLIENT_PROTOCOL_SESSIONS pps          ON car.CLIENT_ID = pps.CLIENT_ID         AND pps.EXPIRES_AT > strftime('%s', 'now') ) GROUP BY CLIENT_ID;",
+    "base_sql": "SELECT c.ID, COUNT(p.ID) AS active_sessions\nFROM public_CLIENT_REQUIRED_ACTIONS c\nJOIN public_CLIENT_PROTOCOL_SESSIONS p ON c.CLIENT_ID = p.CLIENT_ID\nWHERE c.ACTION_TYPE = 'ACTIVE'\nGROUP BY c.CLIENT_ID\nHAVING COUNT(c.ID) > 0",
+    "lora_sql": "SELECT      r.CLIENT_ID,     COUNT(s.ID) AS active_sessions_count FROM      public_CLIENT_REQUIRED_ACTIONS r LEFT JOIN      public_CLIENT_PROTOCOL_SESSIONS s ON r.CLIENT_ID = s.CLIENT_ID AND s.EXPIRES_AT > strftime('%s', 'now') GROUP BY      r.CLIENT_ID",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List all locations with a population count exceeding 10 million as of 2020.",
+    "gold_sql": "SELECT locations.country, locations.region, locations.city  FROM locations  JOIN country_population_data ON locations.locId = country_population_data.locId  WHERE country_population_data.population_count > 10000000    AND country_population_data.year_recorded = 2020;",
+    "base_sql": "SELECT city, country \nFROM locations \nJOIN country_population_data ON locations.locId = country_population_data.locId \nWHERE year_recorded = 2020 AND population_count > 10000000",
+    "lora_sql": "SELECT l.locId, l.city, l.country FROM locations l JOIN country_population_data cpd ON l.locId = cpd.locId WHERE cpd.population_count > 10000000 AND cpd.year_recorded = 2020",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Count the number of page comments made by users born after January 1, 1990, joining VSCMS_PageComments with VSUM_UsersInfo on user_id.",
+    "gold_sql": "SELECT COUNT(*) AS comment_count FROM VSCMS_PageComments pc JOIN VSUM_UsersInfo ui ON pc.user_id = ui.id WHERE ui.birthday > '1990-01-01';",
+    "base_sql": "SELECT COUNT(VSCMS_PageComments.id) \nFROM VSCMS_PageComments \nJOIN VSUM_UsersInfo ON VSCMS_PageComments.user_id = VSUM_UsersInfo.id \nWHERE VSUM_UsersInfo.birthday > '1990-01-01'",
+    "lora_sql": "SELECT COUNT(*) FROM VSCMS_PageComments JOIN VSUM_UsersInfo ON VSCMS_PageComments.user_id = VSUM_UsersInfo.id WHERE strftime('%Y-%m-%d', VSUM_UsersInfo.birthday) > '1990-01-01'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which compute node hosts the most instances based on the usage records and cores allocation?",
+    "gold_sql": "SELECT cnha.host_aggregate_name AS compute_node, COUNT(*) AS instance_count FROM new_cost_usage_records AS ncur JOIN new_compute_node_host_aggregates AS cnha ON ncur.compute_node_id = cnha.compute_node_id GROUP BY cnha.host_aggregate_name ORDER BY instance_count DESC LIMIT 1;",
+    "base_sql": "SELECT compute_node_id FROM new_cost_usage_records GROUP BY compute_node_id ORDER BY COUNT(*) DESC LIMIT 1",
+    "lora_sql": "SELECT cn.host FROM compute_node_host_aggregates cnha JOIN compute_node cn ON cnha.compute_node_id = cn.id JOIN new_cost_usage_records c ON cnha.compute_node_id = c.compute_node_id GROUP BY cn.id ORDER BY COUNT(DISTINCT c.record_id) DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such table: compute_node_host_aggregates",
+    "lora_sd_all_errors": [
+      "no such table: compute_node_host_aggregates",
+      "no such table: compute_node_host_aggregates"
+    ]
+  },
+  {
+    "question": "What is the total number of users who have posted at least one image-based post and have a former name that starts with the letter 'A'?",
+    "gold_sql": "SELECT COUNT(DISTINCT u.id) FROM user u JOIN posts p ON u.id = p.user_id WHERE u.former_name LIKE 'A%' AND p.image_link IS NOT NULL;",
+    "base_sql": "SELECT COUNT(DISTINCT u.id) \nFROM user u\nJOIN posts p ON u.id = p.user_id\nWHERE p.image_link IS NOT NULL AND u.former_name LIKE 'A%'",
+    "lora_sql": "SELECT COUNT(DISTINCT u.id) FROM user u JOIN posts p ON u.id = p.user_id WHERE p.image_link IS NOT NULL   AND u.former_name LIKE 'A%'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "The tables are courses, students, integrations, points_cache, points, daily, and course_offices. Each has their own relationships. The students table links to courses via course_id. Points_cache and points both reference students and integrations. Daily links to students. Course_offices connects courses to offices (though offices table isn't defined, maybe it's implied).",
+    "gold_sql": "SELECT s.student_id FROM students s LEFT JOIN daily d ON s.student_id = d.student_id   AND d.last_daily >= DATE('now', '-7 days') WHERE d.student_id IS NULL;",
+    "base_sql": "SELECT * \nFROM courses \nJOIN students ON courses.course_id = students.course_id \nJOIN integrations ON (points_cache.integration_id = integrations.integration_id OR points.integration_id = integrations.integration_id) \nJOIN points_cache ON students.student_id = points_cache.student_id \nJOIN points ON students.student_id = points.student_id \nJOIN daily ON students.student_id = daily.student_id \nJOIN course_offices ON courses.course_id = course_offices.cours",
+    "lora_sql": "SELECT s.student_id, s.course_id, s.last_seen, s.pl_id, s.discord_id, s.piazza_id, c.pl_course_id, c.pl_last_checked FROM students s JOIN courses c ON s.course_id = c.course_id",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: course_offices.cours",
+    "base_sd_all_errors": [
+      "no such column: course_offices.cours",
+      "no such column: course_offices.cours"
+    ]
+  },
+  {
+    "question": "Calculate the percentage of containers where the number of active API keys is less than the number of issued tokens.",
+    "gold_sql": "SELECT      (COUNT(CASE          WHEN COALESCE(ak.active_api_keys, 0) < COALESCE(t.issued_tokens, 0) THEN 1          ELSE 0          END) * 100.0) / total.containers_count AS percentage FROM (     SELECT          container_id,         COUNT(DISTINCT CASE WHEN expires_at > datetime('now') THEN api_key END) as active_api_keys     FROM _continuity_api_keys     GROUP BY container_id ) ak LEFT JOIN (     SELECT          container_id,         COUNT(DISTINCT CASE WHEN issued_at <= datetime('now') THEN token END) as issued_tokens     FROM _continuity_tokens     GROUP BY container_id ) t ON ak.container_id = t.container_id CROSS JOIN (     SELECT COUNT(*) as containers_count     FROM (         SELECT DISTINCT container_id FROM _continuity_api_keys         UNION          SELECT DISTINCT container_id FROM _continuity_tokens     ) total ) total;",
+    "base_sql": "WITH api_key_count AS (\n    SELECT \n        container_id,\n        COUNT(*) AS active_api_keys\n    FROM \n        _continuity_api_keys\n    WHERE \n        expires_at IS NULL\n    GROUP BY \n        container_id\n),\ntoken_count AS (\n    SELECT \n        container_id,\n        COUNT(*) AS issued_tokens\n    FROM \n        _continuity_tokens\n    GROUP BY \n        container_id\n)\nSELECT \n    COUNT(*) * 100.0 / COUNT(DISTINCT t.container_id) AS percentage\nFROM \n    token_count t\nJOIN \n    api_key_count a\nON \n    t.container_id = a.container_id\nWHERE \n    a.active_api_keys < t.issued_tokens",
+    "lora_sql": "SELECT      COUNT(*) * 100.0 / (SELECT COUNT(*) FROM _continuity_containers_tmp) AS percentage FROM (     SELECT          c.id,         COUNT(DISTINCT k.key_id) AS active_api_keys,         COUNT(DISTINCT t.token) AS issued_tokens     FROM          _continuity_containers_tmp c     LEFT JOIN _continuity_api_keys k ON c.id = k.container_id AND k.expires_at > datetime('now')     LEFT JOIN _continuity_tokens t ON c.id = t.container_id AND t.expires_at > datetime('now')     GROUP BY c.id     HAVING active_api_keys < issued_tokens )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Find the resident who has the highest total expense-to-payment ratio in each republic, along with the name of the republic, the total expenses, and the total payments made in the current fiscal year, excluding residents who have left the republic.",
+    "gold_sql": "WITH ResidentExpenses AS (     SELECT          idMorador,         SUM(valor) AS total_expenses     FROM tbGasto     WHERE data >= date('now', 'start of year')          AND data <= date('now')     GROUP BY idMorador ), ResidentPayments AS (     SELECT          idMorador,         SUM(valor) AS total_payments     FROM tbPagamento     WHERE data >= date('now', 'start of year')          AND data <= date('now')     GROUP BY idMorador ), CurrentResidents AS (     SELECT          mr.idRepublica,         m.id AS morador_id,         m.nome AS morador_nome     FROM tbMoradorRepublica mr     JOIN tbMorador m ON mr.idMorador = m.id     WHERE mr.dataSaida IS NULL ), ResidentData AS (     SELECT         cr.idRepublica,         cr.morador_id,         cr.morador_nome,         COALESCE(re.total_expenses, 0) AS total_expenses,         COALESCE(rp.total_payments, 0) AS total_payments,         (COALESCE(re.total_expenses, 0) * 1.0 / NULLIF(COALESCE(rp.total_payments, 0), 0)) AS ratio     FROM CurrentResidents cr     LEFT JOIN ResidentExpenses re ON cr.morador_id = re.idMorador     LEFT JOIN ResidentPayments rp ON cr.morador_id = rp.idMorador     WHERE COALESCE(rp.total_payments, 0) > 0 ), ResidentRank AS (     SELECT          rd.idRepublica,         rd.morador_nome,         rd.total_expenses,         rd.total_payments,         ROW_NUMBER() OVER (PARTITION BY rd.idRepublica ORDER BY rd.ratio DESC) AS rn     FROM ResidentData rd ) SELECT      r.nome AS republica_nome,     rr.morador_nome,     rr.total_expenses,     rr.total_payments FROM ResidentRank rr JOIN tbRepublica r ON rr.idRepublica = r.id WHERE rr.rn = 1;",
+    "base_sql": "WITH ResidentExpenses AS (\n    SELECT\n        mr.id,\n        rep.nome AS republica_nome,\n        SUM(g.valor) AS total_gastos\n    FROM\n        tbMoradorRepublica mrr\n        JOIN tbMorador mr ON mrr.idMorador = mr.id\n        JOIN tbRepublica rep ON mrr.idRepublica = rep.id\n        JOIN tbGasto g ON mr.id = g.idMorador\n    WHERE\n        mrr.dataSaida IS NULL\n        AND g.data >= '2023-01-01'\n    GROUP BY\n        mr.id, rep.nome\n),\nResidentPayments AS (\n    SELECT\n        mr.id,\n        rep.nome AS republica_nome,\n        SUM(p.valor) AS total_pagamentos\n    FROM\n        tbMoradorRepublica mrr\n        JOIN tbMorador mr ON mrr.idMorador = mr.id\n        JOIN tbRepublica rep ON mrr.idRepublica = rep.id\n        JOIN tbPagamento p ON mr.id = p.idMorador\n    WHERE\n        mrr.dataSaida IS NULL\n        AND p.data >= '2023-01-01'\n    GROUP BY\n        mr.",
+    "lora_sql": "WITH TotalExpenses AS (     SELECT          idRepublica,         SUM(valor) AS total_expenses     FROM tbGasto     WHERE strftime('%Y', data) = strftime('%Y', 'now')     GROUP BY idRepublica ), TotalPayments AS (     SELECT          idRepublica,         SUM(valor) AS total_payments     FROM tbPagamento     WHERE strftime('%Y', data) = strftime('%Y', 'now')     GROUP BY idRepublica ), ResidentExpenses AS (     SELECT          m.id AS idMorador,         r.id AS idRepublica,         SUM(g.valor) AS total_expenses     FROM tbMorador m     JOIN tbMoradorRepublica mr ON m.id = mr.idMorador     JOIN tbRepublica r ON mr.idRepublica = r.id     JOIN tbGasto g ON m.id = g.idMorador     WHERE mr.dataSaida IS NULL     AND strftime('%Y', g.data) = strftime('%Y', 'now')     GROUP BY m.id, r.id ), ResidentPayments AS (     SELECT          m.id AS idMorador,         r.id AS idRepublica,         SUM(p.valor) AS total_payments     FROM tbMorador m     JOIN tbMoradorRepublica mr ON",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "incomplete input",
+    "base_sd_all_errors": [
+      "incomplete input",
+      "incomplete input"
+    ],
+    "lora_sd_first_error": "no such column: idRepublica",
+    "lora_sd_all_errors": [
+      "no such column: idRepublica",
+      "incomplete input"
+    ]
+  },
+  {
+    "question": "Retrieve the total number of login attempts per user, including only those users with more than five attempts.",
+    "gold_sql": "SELECT user_id, COUNT(*) AS total_attempts FROM user_login_attempts GROUP BY user_id HAVING total_attempts > 5;",
+    "base_sql": "SELECT user_id, COUNT(*) AS total_attempts \nFROM user_login_attempts \nGROUP BY user_id \nHAVING COUNT(*) > 5",
+    "lora_sql": "SELECT user.id, COUNT(*) AS total_attempts FROM user JOIN user_login_attempts ON user.id = user_login_attempts.user_id GROUP BY user.id HAVING COUNT(*) > 5",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Retrieve the details of the most recent audit log entries for each user who has a specific user setting enabled, along with their associated authorities and current session status.",
+    "gold_sql": "WITH LatestAudit AS (     SELECT          al.UserId,          al.EventTime,          al.EventType,          al.Details,         ROW_NUMBER() OVER (PARTITION BY al.UserId ORDER BY al.EventTime DESC) as rnk     FROM AuditLog al ) SELECT      u.Id AS UserId,      u.Username,      u.Enabled,      u.LastPasswordResetDate,      la.EventTime,      la.EventType,      la.Details,     GROUP_CONCAT(DISTINCT a.Name) AS Authorities,     COALESCE(         CASE WHEN us.IsActive = 1 THEN 'Active' END,          'Inactive'     ) AS SessionStatus FROM User u JOIN UserSetting uset ON u.Id = uset.UserId JOIN LatestAudit la ON la.UserId = u.Id LEFT JOIN UserAuthority ua ON u.Id = ua.UserId LEFT JOIN Authority a ON a.Id = ua.AuthorityId LEFT JOIN UserSession us ON u.Id = us.UserId AND us.IsActive = 1 WHERE      uset.SettingKey = 'specific_setting_key'      AND uset.SettingValue = 'enabled_value'     AND la.rnk = 1 GROUP BY      u.Id, u.Username, la.EventTime, la.EventType, la.Details, us.IsActive ORDER BY la.EventTime DESC;",
+    "base_sql": "SELECT \n    A.UserId, \n    U.Username, \n    U.FirstName, \n    U.LastName, \n    A.EventTime, \n    A.EventType, \n    AU.Name AS AuthorityName, \n    US.SessionId, \n    US.EndTime \nFROM \n    AuditLog A \nJOIN \n    User U ON A.UserId = U.Id \nLEFT JOIN \n    UserAuthority UA ON U.Id = UA.UserId \nJOIN \n    (\n        SELECT \n            UserId, \n            MAX(EventTime) AS MaxEventTime \n        FROM \n            AuditLog \n        GROUP BY \n            UserId\n    ) AL ON A.UserId = AL.UserId AND A.EventTime = AL.MaxEventTime \nLEFT JOIN \n    Authority AU ON UA.AuthorityId = AU.Id \nLEFT JOIN \n    UserSession US ON U.Id = US.UserId AND US.IsActive = 1 \nWHERE \n    U.Id IN (\n        SELECT \n            UserId \n        FROM \n            UserSetting \n        WHERE \n            SettingKey = 'specific_setting_key' AND SettingValue = 'enabled'\n    )",
+    "lora_sql": "WITH LatestAudit AS (     SELECT          UserId,         EventType,         EventTime,         Details,         ROW_NUMBER() OVER (PARTITION BY UserId ORDER BY EventTime DESC) as rn     FROM AuditLog ), EnabledUsers AS (     SELECT DISTINCT UserId     FROM UserSetting     WHERE SettingKey = 'enabled' AND SettingValue = 'true' ) SELECT      u.Id AS UserId,     u.Username,     u.FirstName,     u.LastName,     u.Email,     au.Name AS AuthorityName,     us.IsActive AS IsCurrentSessionActive,     la.EventTime,     la.EventType,     la.Details FROM EnabledUsers eu JOIN User u ON eu.UserId = u.Id JOIN UserAuthority ua ON u.Id = ua.UserId JOIN Authority au ON ua.AuthorityId = au.Id LEFT JOIN UserSession us ON u.Id = us.UserId AND us.EndTime IS NULL LEFT JOIN LatestAudit la ON u.Id = la.UserId AND la.rn = 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 1,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: A.User_id",
+    "base_sd_all_errors": [
+      "no such column: A.User_id"
+    ]
+  },
+  {
+    "question": "What is the total number of hours worked by employees who have completed the \"Python for Data Analysis\" training program?",
+    "gold_sql": "SELECT SUM(W.HOURS) AS total_hours_worked FROM WORKS_ON W WHERE W.ESSN IN (     SELECT E.SSN     FROM EMPLOYEE E     JOIN EMPLOYEE_TRAINING ET ON E.SSN = ET.ESSN     JOIN TRAINING_PROGRAMS TP ON ET.TRAINING_ID = TP.TRAINING_ID     WHERE TP.TITLE = 'Python for Data Analysis' );",
+    "base_sql": "SELECT SUM(T2.HOURS) FROM EMPLOYEE AS T1 JOIN WORKS_ON AS T2 ON T1.SSN = T2.ESSN JOIN PROJECT AS T3 ON T2.PNO = T3.PNUMBER JOIN EMPLOYEE_TRAINING AS T4 ON T1.SSN = T4.ESSN JOIN TRAINING_PROGRAMS AS T5 ON T4.TRAINING_ID = T5.TRAINING_ID WHERE T5.TITLE = 'Python for Data Analysis'",
+    "lora_sql": "SELECT SUM(W.HOURS) AS TotalHours FROM WORKS_ON W JOIN EMPLOYEE_TRAINING ET ON W.ESSN = ET.ESNN JOIN TRAINING_PROGRAMS T ON ET.TRAINING_ID = T.TRAINING_ID WHERE T.TITLE = 'Python for Data Analysis'",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such column: ET.ESNN",
+    "lora_sd_all_errors": [
+      "no such column: ET.ESNN",
+      "no such column: ET.ESNN"
+    ]
+  },
+  {
+    "question": "What is the total number of unique ROLE_NAMEs in PERMISSIONS_SRC_TEMP that have at least two distinct FUNCTION_NAMEs with FUNCTION_KEY values under 100 in PERMISSIONS_TEMP, and are associated with more than one GROUP_ID in MFR_HIDDEN_GROUPS_T where a_surrogateKey is not null, after performing multiple self-joins on MFR_HIDDEN_GROUPS_T and cross-joins with both PERMISSIONS_SRC_TEMP and PERMISSIONS_TEMP?",
+    "gold_sql": "WITH FunctionCount AS (     SELECT ps.ROLE_NAME     FROM PERMISSIONS_SRC_TEMP ps     JOIN PERMISSIONS_TEMP pt ON ps.FUNCTION_NAME = pt.FUNCTION_KEY     WHERE pt.FUNCTION_KEY < 100     GROUP BY ps.ROLE_NAME     HAVING COUNT(DISTINCT ps.FUNCTION_NAME) >= 2 ), GroupCount AS (     SELECT ps.ROLE_NAME     FROM PERMISSIONS_SRC_TEMP ps     JOIN MFR_HIDDEN_GROUPS_T mhg1 ON ps.ROLE_NAME = mhg1.GROUP_ID     JOIN MFR_HIDDEN_GROUPS_T mhg2 ON ps.ROLE_NAME = mhg2.GROUP_ID     WHERE mhg1.a_surrogateKey IS NOT NULL AND mhg2.a_surrogateKey IS NOT NULL AND mhg1.ID <> mhg2.ID     GROUP BY ps.ROLE_NAME     HAVING COUNT(DISTINCT mhg1.GROUP_ID) > 1 ) SELECT COUNT(*) FROM FunctionCount WHERE ROLE_NAME IN (SELECT ROLE_NAME FROM GroupCount);",
+    "base_sql": "```sql\nSELECT COUNT(DISTINCT pst.ROLE_NAME)\nFROM PERMISSIONS_SRC_TEMP pst\nJOIN PERMISSIONS_TEMP pt ON pst.ROLE_NAME = pt.ROLE_NAME\nJOIN (\n    SELECT ghg.ROLE_NAME\n    FROM MFR_HIDDEN_GROUPS_T ghg\n    WHERE ghg.a_surrogateKey IS NOT NULL\n    GROUP BY ghg.ROLE_NAME\n    HAVING COUNT(DISTINCT ghg.GROUP_ID) > 1\n) ghg ON pst.ROLE_NAME = ghg.ROLE_NAME\nJOIN (\n    SELECT ps.ROLE_NAME\n    FROM PERMISSIONS_SRC_TEMP ps\n    JOIN PERMISSIONS_TEMP pt ON ps.ROLE_NAME = pt.ROLE_NAME AND pt.function_key < 100\n    GROUP BY ps.ROLE_NAME\n    HAVING COUNT(DISTINCT ps.FUNCTION_NAME) >= 2\n) subq ON pst.ROLE_NAME = subq.ROLE_NAME\n```",
+    "lora_sql": "WITH role_function_counts AS (     SELECT          psrc.ROLE_NAME,         COUNT(DISTINCT ptemp.FUNCTION_NAME) AS function_count     FROM          PERMISSIONS_SRC_TEMP psrc     JOIN          PERMISSIONS_TEMP ptemp ON psrc.ROLE_NAME = CAST(ptemp.ROLE_KEY AS TEXT)     GROUP BY          psrc.ROLE_NAME     HAVING          function_count >= 2 ), role_group_counts AS (     SELECT          psrc.ROLE_NAME,         COUNT(DISTINCT mfgt.GROUP_ID) AS group_count     FROM          PERMISSIONS_SRC_TEMP psrc     JOIN          MFR_HIDDEN_GROUPS_T mfgt ON CAST(ptemp.ROLE_KEY AS TEXT) = mfgt.a_surrogateKey     GROUP BY          psrc.ROLE_NAME     HAVING          group_count > 1 ) SELECT      COUNT(DISTINCT rfc.ROLE_NAME) FROM      role_function_counts rfc JOIN      role_group_counts rgc ON rfc.ROLE_NAME = rgc.ROLE_NAME",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "near \"```sql\nSELECT COUNT(DISTINCT pst.ROLE_NAME)\nFROM PERMISSIONS_SRC_TEMP pst\nJOIN PERMISSIONS_TEMP pt ON pst.ROLE_NAME = (SELECT ghg.ROLE_NAME FROM MFR_HIDDEN_GROUPS_T ghg WHERE ghg.a_surrogateKey ",
+    "base_sd_all_errors": [
+      "near \"```sql\nSELECT COUNT(DISTINCT pst.ROLE_NAME)\nFROM PERMISSIONS_SRC_TEMP pst\nJOIN PERMISSIONS_TEMP pt ON pst.ROLE_NAME = (SELECT ghg.ROLE_NAME FROM MFR_HIDDEN_GROUPS_T ghg WHERE ghg.a_surrogateKey ",
+      "near \"```sql\nSELECT COUNT(DISTINCT pst.ROLE_NAME)\nFROM PERMISSIONS_SRC_TEMP pst\nJOIN PERMISSIONS_TEMP pt ON pst.ROLE_NAME = pt.ROLE_NAME\nJOIN (\n    SELECT ghg.ROLE_NAME\n    FROM MFR_HIDDEN_GROUPS_T gh"
+    ],
+    "lora_sd_first_error": "no such column: ptemp.FUNCTION_NAME",
+    "lora_sd_all_errors": [
+      "no such column: ptemp.FUNCTION_NAME",
+      "no such column: ptemp.FUNCTION_NAME"
+    ]
+  },
+  {
+    "question": "How many employees are assigned to projects that have not been given an end date?",
+    "gold_sql": "SELECT COUNT(DISTINCT employee_project.employee_id) FROM employee_project JOIN project ON employee_project.project_id = project.id WHERE project.end_date IS NULL;",
+    "base_sql": "SELECT COUNT(DISTINCT e.id) FROM employee e JOIN employee_project ep ON e.id = ep.employee_id JOIN project p ON ep.project_id = p.id WHERE p.end_date IS NULL",
+    "lora_sql": "SELECT COUNT(DISTINCT ep.employee_id) FROM employee_project ep JOIN project p ON ep.project_id = p.id WHERE p.end_date IS NULL",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Calculate the sum of all donations made to charitable organizations during October, November, and December of 2022.",
+    "gold_sql": "SELECT SUM(amount) AS total_donations FROM nonprofits_donations WHERE donation_date BETWEEN '2022-10-01' AND '2022-12-31';",
+    "base_sql": "SELECT SUM(amount) FROM nonprofits_donations WHERE donation_date BETWEEN '2022-10-01' AND '2022-12-31'",
+    "lora_sql": "SELECT SUM(amount) AS total_donations FROM nonprofits_donations WHERE donation_date BETWEEN '2022-10-01' AND '2022-12-31'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the total count of post views by users who have a notification preference enabled for type 12 and have not blocked the post's author?",
+    "gold_sql": "SELECT SUM(pv.viewCount) FROM PostView pv JOIN Post p ON pv.postId = p.id JOIN NotificationPreference np ON pv.userId = np.userId     AND np.type = 12     AND np.isEnabled = 1 LEFT JOIN Block b ON pv.userId = b.userId AND b.blockedId = p.userId WHERE b.id IS NULL;",
+    "base_sql": "SELECT COUNT(DISTINCT pv.userId) \nFROM PostView pv\nJOIN User u ON pv.userId = u.id\nJOIN NotificationPreference np ON u.id = np.userId AND np.type = 12 AND np.isEnabled = 1\nWHERE NOT EXISTS (\n    SELECT 1 \n    FROM Block b \n    WHERE b.userId = pv.userId AND b.blockedId = (SELECT userId FROM Post WHERE id = pv.postId)\n)",
+    "lora_sql": "SELECT COUNT(*) AS total_post_views FROM PostView WHERE userId IN (     SELECT np.userId     FROM NotificationPreference np     JOIN User u ON np.userId = u.id     WHERE np.type = 12 AND np.isEnabled = 1 ) AND userId NOT IN (     SELECT b.userId     FROM Block b     JOIN User u ON b.blockedId = u.id     WHERE b.blockedId IN (         SELECT p.userId         FROM Post p         WHERE p.id = PostView.postId     ) )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the total number of maintenance requests submitted by each user for the past year, sorted in descending order.",
+    "gold_sql": "SELECT user_id, COUNT(*) AS total_requests FROM db_re_maintenance_request WHERE gmt_create >= datetime('now', '-1 year') GROUP BY user_id ORDER BY total_requests DESC;",
+    "base_sql": "SELECT user_id, COUNT(*) AS total_requests \nFROM db_re_maintenance_request \nWHERE gmt_create >= DATEADD(year, -1, GETDATE()) \nGROUP BY user_id \nORDER BY total_requests DESC",
+    "lora_sql": "SELECT      u.id AS user_id,     COUNT(*) AS total_requests FROM      db_re_maintenance_request m JOIN      user u ON m.user_id = u.id WHERE      m.gmt_create >= DATE('now', '-1 year') GROUP BY      u.id ORDER BY      total_requests DESC",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: year",
+    "base_sd_all_errors": [
+      "no such column: year",
+      "no such column: year"
+    ]
+  },
+  {
+    "question": "Show the total number of votes for each poll option in polls that have an expiration date set for '2025-12-31'.",
+    "gold_sql": "SELECT ตัวเลือกโพล.id, COUNT(คะแนนตัวเลือกโพล.id) AS total_votes FROM โพล JOIN ตัวเลือกโพล ON โพล.id = ตัวเลือกโพล.poll_id LEFT JOIN คะแนนตัวเลือกโพล ON ตัวเลือกโพล.id = คะแนนตัวเลือกโพล.poll_option_id WHERE โพล.expiration_date = '2025-12-31' GROUP BY ตัวเลือกโพล.id;",
+    "base_sql": "SELECT poll_option_id, COUNT(*) AS total_votes \nFROM คะแนนตัวเลือกโพล \nWHERE poll_id IN (SELECT id FROM โพล WHERE expiration_date = '2025-12-31') \nGROUP BY poll_optio",
+    "lora_sql": "SELECT t1.option_text, SUM(t2.vote_count) AS total_votes FROM ตัวเลือกโพล t1 JOIN คะแนนตัวเลือกโพล t2 ON t1.id = t2.poll_option_id WHERE t1.poll_id IN (     SELECT id      FROM โพล      WHERE expiration_date = '2025-12-31' ) GROUP BY t1.id",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: poll_id",
+    "base_sd_all_errors": [
+      "no such column: poll_id",
+      "no such column: poll_id"
+    ],
+    "lora_sd_first_error": "no such column: t2.vote_count",
+    "lora_sd_all_errors": [
+      "no such column: t2.vote_count",
+      "no such column: t2.vote_count"
+    ]
+  },
+  {
+    "question": "List the top 5 documents with the highest number of unique user visits in the last 90 days, where each document has at least one associated tag, at least one attribute, and has had a status change recorded in the last 30 days. Include the number of visits, the latest status change date, and the count of attributes for each document.",
+    "gold_sql": "WITH visit_counts AS (     SELECT doc_id, COUNT(DISTINCT profile_id) AS unique_visits     FROM cnv_visit_log     WHERE visit_time >= datetime('now', '-90 days')     GROUP BY doc_id ), tags_exists AS (     SELECT DISTINCT doc_id     FROM cnv_doc2tag ), attributes_count AS (     SELECT doc_id, COUNT(attr_id) AS attr_count     FROM cnv_doc2attr     GROUP BY doc_id ), status_latest AS (     SELECT doc_id, MAX(status_time) AS latest_status_time     FROM cnv_document_status     WHERE status_time >= datetime('now', '-30 days')     GROUP BY doc_id ) SELECT      v.doc_id,     v.unique_visits,     s.latest_status_time,     a.attr_count FROM visit_counts v JOIN tags_exists t ON v.doc_id = t.doc_id JOIN attributes_count a ON v.doc_id = a.doc_id JOIN status_latest s ON v.doc_id = s.doc_id ORDER BY v.unique_visits DESC LIMIT 5;",
+    "base_sql": "SELECT \n    d.id, \n    COUNT(DISTINCT v.profile_id) AS num_visits, \n    MAX(sl.status_time) AS latest_status_change, \n    COUNT(DISTINCT da.attr_id) AS num_attributes\nFROM \n    cnv_document d\nJOIN \n    cnv_doc2tag dt ON d.id = dt.doc_id\nJOIN \n    cnv_doc2attr da ON d.id = da.doc_id\nJOIN \n    cnv_document_status sl ON d.id = sl.doc_id\nJOIN \n    cnv_visit_log v ON d.id = v.doc_id\nWHERE \n    v.visit_time >= NOW() - INTERVAL '90' DAY\n    AND sl.status_time >= NOW() - INTERVAL '30' DAY\nGROUP BY \n    d.id\nORDER BY \n    num_visits DESC\nLIMIT 5",
+    "lora_sql": "WITH qualified_docs AS (     SELECT DISTINCT d.id     FROM cnv_document d     JOIN cnv_doc2tag dt ON d.id = dt.doc_id     JOIN cnv_doc2attr da ON d.id = da.doc_id     JOIN cnv_document_status ds ON d.id = ds.doc_id     WHERE ds.status_time >= datetime('now', '-30 days') ), recent_visits AS (     SELECT v.doc_id, COUNT(*) AS visit_count     FROM cnv_visit_log v     WHERE v.visit_time >= datetime('now', '-90 days')     GROUP BY v.doc_id ) SELECT      r.doc_id,     r.visit_count,     MAX(ds.status_time) AS latest_status_change,     COUNT(da.attr_id) AS attr_count FROM recent_visits r JOIN qualified_docs qd ON r.doc_id = qd.id LEFT JOIN cnv_document_status ds ON r.doc_id = ds.doc_id AND ds.status_time >= datetime('now', '-30 days') LEFT JOIN cnv_doc2attr da ON r.doc_id = da.doc_id GROUP BY r.doc_id ORDER BY r.visit_count DESC LIMIT 5",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"'90'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'90'\": syntax error",
+      "near \"'90'\": syntax error"
+    ]
+  },
+  {
+    "question": "What is the average accuracy score of argument translations for arguments that are linked together and were reported by users with a 'moderator' role?",
+    "gold_sql": "SELECT AVG(at.accuracyScore) FROM ArgumentTranslation at WHERE at.argumentId IN (     SELECT fromArgumentId FROM ArgumentLink     UNION ALL     SELECT toArgumentId FROM ArgumentLink ) AND EXISTS (     SELECT 1     FROM ArgumentReport ar     JOIN User u ON ar.reporterId = u.id     WHERE ar.argumentId = at.argumentId     AND u.role = 'moderator' );",
+    "base_sql": "SELECT AVG(t.accuracyScore) \nFROM ArgumentTranslation t \nJOIN Argument a ON t.argumentId = a.id \nJOIN ArgumentLink l ON a.id = l.fromArgumentId \nJOIN ArgumentReport r ON a.id = r.argumentId \nJOIN User u ON r.reporterId = u.id \nWHERE u.role = 'moderator'",
+    "lora_sql": "SELECT AVG(at.accuracyScore) FROM ArgumentTranslation at JOIN ArgumentLink al ON at.argumentId = al.fromArgumentId OR at.argumentId = al.toArgumentId JOIN ArgumentReport ar ON al.fromArgumentId = ar.argumentId OR al.toArgumentId = ar.argumentId JOIN User u ON ar.reporterId = u.id WHERE u.role = 'moderator'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the model versions, their deployment CPU usage, and training status for experiments that included 'knn' in the preprocessing steps, ordered by deployment time descending.",
+    "gold_sql": "SELECT      mvh.version_number AS model_version,     ru.cpu_usage AS deployment_cpu_usage,     mts.status_code AS training_status,     dl.deployment_time FROM      model_version_history mvh JOIN model_training_status mts ON mvh.run_id = mts.run_id JOIN model_training_inputs mti ON mvh.run_id = mti.run_id JOIN deployment_logs dl ON mvh.id = dl.resource_id JOIN resource_utilization ru ON dl.id = ru.deployment_log_id WHERE      mti.preprocessing_steps LIKE '%knn%' ORDER BY      dl.deployment_time DESC;",
+    "base_sql": "SELECT mvh.version_number, ru.cpu_usage, mts.status_message \nFROM model_version_history mvh\nJOIN model_training_status mts ON mvh.run_id = mts.run_id\nJOIN resource_utilization ru ON mvh.id = ru.deployment_log_id\nJOIN model_training_inputs mti ON mvh.run_id = mti.run_id\nWHERE mti.preprocessing_steps LIKE '%knn%' \nORDER BY ru.deployment_time DESC",
+    "lora_sql": "SELECT      mvh.id AS model_version,     ru.cpu_usage,     mts.status_message FROM model_version_history mvh JOIN model_training_status mts ON mvh.run_id = mts.run_id JOIN model_training_resources mtr ON mvh.run_id = mtr.run_id JOIN resource_utilization ru ON mtr.resource_id = ru.deployment_log_id WHERE mvh.run_id IN (     SELECT DISTINCT run_id     FROM feature_engineering_steps     WHERE operation LIKE '%knn%' ) ORDER BY ru.timestamp DESC",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: ru.deployment_time",
+    "base_sd_all_errors": [
+      "no such column: ru.deployment_time",
+      "no such column: ru.timestamp"
+    ],
+    "lora_sd_first_error": "no such column: ru.deployment_time",
+    "lora_sd_all_errors": [
+      "no such column: ru.deployment_time",
+      "no such column: ru.deployment_time"
+    ]
+  },
+  {
+    "question": "Identify employees who work in a department managed by someone who also works in a different department with a higher budget.",
+    "gold_sql": "SELECT e.eid FROM Emp e JOIN Works w ON e.eid = w.eid JOIN Dept d ON w.did = d.did WHERE d.managerid IN (     SELECT m.eid     FROM Emp m     JOIN Works w2 ON m.eid = w2.eid     JOIN Dept d2 ON w2.did = d2.did     WHERE EXISTS (         SELECT 1         FROM Dept d1         WHERE d1.managerid = m.eid         AND d2.budget > d1.budget     ) );",
+    "base_sql": "SELECT E1.eid, E1.ename \nFROM Emp E1 \nJOIN Works W1 ON E1.eid = W1.eid \nJOIN Dept D1 ON W1.did = D1.did \nJOIN Works W2 ON E1.eid = W2.eid AND W2.did != D1.did \nJOIN Dept D2 ON W2.did = D2.did \nWHERE D1.managerid = E1.eid AND D2.budget > D1.budget",
+    "lora_sql": "SELECT e.eid, e.ename FROM Emp e JOIN Works w ON e.eid = w.eid JOIN Dept d ON w.did = d.did WHERE EXISTS (     SELECT 1     FROM Works w2     JOIN Dept d2 ON w2.did = d2.did     WHERE w2.eid = d.managerid AND d2.budget > d.budget )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "How many students have scored below the KKM (Minimum Competency Standard) in at least one subject this term?",
+    "gold_sql": "SELECT COUNT(DISTINCT m.pendaftaran_masuk_id_pendaftaran_masuk) FROM mean_mapel m JOIN mata_pelajaran mp ON m.mata_pelajaran_id_mata_pelajaran = mp.id_mata_pelajaran WHERE CAST(m.nilai AS INTEGER) < mp.kkm;",
+    "base_sql": "SELECT COUNT(DISTINCT pendaftaran_masuk.peserta_didik_id_peserta_didik) \nFROM mean_mapel pm\nJOIN mata_pelajaran mp ON pm.mata_pelajaran_id_mata_pelajaran = mp.id_mata_pelajaran\nJOIN pendaftaran_masuk ON pendaftaran_masuk.id_pendaftaran_masuk = pm.pendaftaran_masuk_id_pendaftaran_masuk\nWHERE CAST(pm.nilai AS INTEGER) < mp.kk",
+    "lora_sql": "SELECT COUNT(DISTINCT pm.peserta_didik_id_peserta_didik) FROM mean_mapel pm JOIN mata_pelajaran mp ON pm.mata_pelajaran_id_mata_pelajaran = mp.id_mata_pelajaran WHERE CAST(pm.nilai AS INTEGER) < mp.kkm",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: pm.peserta_didik_id_peserta_didik",
+    "base_sd_all_errors": [
+      "no such column: pm.peserta_didik_id_peserta_didik",
+      "no such column: mp.kk"
+    ],
+    "lora_sd_first_error": "no such column: pm.peserta_didik_id_peserta_didik",
+    "lora_sd_all_errors": [
+      "no such column: pm.peserta_didik_id_peserta_didik",
+      "no such column: pm.peserta_didik_id_peserta_didik"
+    ]
+  },
+  {
+    "question": "What is the total donation value for projects in the country named 'Canada'?",
+    "gold_sql": "SELECT SUM(VALUE) AS total_donation FROM OOAD_DONATION WHERE PROJ_ID IN (     SELECT p.ID     FROM OOAD_PROJECT p     JOIN OOAD_PROJECT_COUNTRY pc ON p.ID = pc.PROJECTID     JOIN OOAD_COUNTRY c ON pc.COUNTRYID = c.ID     WHERE c.NAME = 'Canada' );",
+    "base_sql": "SELECT SUM(T1.VALUE) \nFROM OOAD_DONATION AS T1 \nJOIN OOAD_PROJECT AS T2 ON T1.PROJ_ID = T2.ID \nJOIN OOAD_PROJECT_COUNTRY AS T3 ON T2.ID = T3.PROJECTID \nJOIN OOAD_Country AS T4 ON T3.COUNTRYID = T4.ID \nWHERE T4.NAME = 'Canada'",
+    "lora_sql": "SELECT SUM(d.VALUE) AS TotalDonationValue FROM OOAD_DONATION d JOIN OOAD_PROJECT p ON d.PROJ_ID = p.ID JOIN OOAD_PROJECT_COUNTRY pc ON p.ID = pc.PROJECTID JOIN OOAD_COUNTRY c ON pc.COUNTRYID = c.ID WHERE c.NAME = 'Canada'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which user has the highest number of notes favorited by other users?",
+    "gold_sql": "SELECT n.user_id FROM public_e2e_user_notes n JOIN public_e2e_note_favorites f ON n.id = f.note_id WHERE n.user_id != f.user_id GROUP BY n.user_id ORDER BY COUNT(f.id) DESC LIMIT 1;",
+    "base_sql": "SELECT user_id FROM public_e2e_note_favorites GROUP BY user_id ORDER BY COUNT(note_id) DESC LIMIT 1",
+    "lora_sql": "SELECT u.id, u.username, COUNT(*) AS favorite_count FROM public_e2e_note_favorites nf JOIN public_e2e_users u ON nf.user_id = u.id WHERE nf.note_id IN (     SELECT note_id     FROM public_e2e_note_favorites     WHERE user_id != nf.user_id ) GROUP BY u.id ORDER BY favorite_count DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the total value of orders placed by customers from the state of São Paulo?",
+    "gold_sql": "SELECT SUM(pdg.valortotal) AS total_value FROM pedidos_dados_gerais pdg JOIN clientes cli ON pdg.codigo_cli = cli.codigo WHERE cli.uf = 'SP';",
+    "base_sql": "SELECT SUM(p.valortotal) AS total_value FROM pedidos_dados_gerais p JOIN clientes c ON p.codigo_cli = c.codigo WHERE c.uf = 'SP'",
+    "lora_sql": "SELECT SUM(p.valortotal) AS total_value FROM pedidos_dados_gerais p JOIN clientes c ON p.codigo_cli = c.codigo WHERE c.uf = 'SP'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the average suggested wholesale price of products that have at least one customer return within the last six months?",
+    "gold_sql": "SELECT AVG(CAST(p.suggested_wholesale_price AS REAL)) FROM s_product p WHERE EXISTS (     SELECT 1     FROM s_customer_return cr     JOIN s_item i ON cr.order_id = i.order_id     WHERE cr.return_date >= DATE('now', '-6 months')     AND p.product_id = i.product_id );",
+    "base_sql": "SELECT AVG(suggested_wholesale_price) \nFROM s_product \nWHERE product_id IN (SELECT product_id FROM s_customer_return WHERE return_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH))",
+    "lora_sql": "SELECT AVG(suggested_wholesale_price) FROM s_product WHERE product_id IN (     SELECT DISTINCT product_id      FROM s_customer_return      WHERE return_date >= DATE('now', '-6 months') )",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"6\": syntax error",
+    "base_sd_all_errors": [
+      "near \"6\": syntax error",
+      "near \"6\": syntax error"
+    ]
+  },
+  {
+    "question": "What are the most frequently recorded themes in employee training sessions from the treinamento_funcionario table?",
+    "gold_sql": "SELECT tema_treinamento, COUNT(*) AS frequency FROM treinamento_funcionario GROUP BY tema_treinamento ORDER BY frequency DESC;",
+    "base_sql": "SELECT tema_treinamento FROM treinamento_funcionario GROUP BY tema_treinamento ORDER BY COUNT(*) DESC LIMIT 1",
+    "lora_sql": "SELECT tema_treinamento, COUNT(*) AS frequencia FROM treinamento_funcionario GROUP BY tema_treinamento ORDER BY frequencia DESC",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Identify the groups that have access to the document titled \"Quarterly Report\".",
+    "gold_sql": "SELECT g.id_grupo, g.ds_nome, g.ds_descricao FROM tb_grupo g JOIN tb_documento_x_grupo dg ON g.id_grupo = dg.id_grupo JOIN tb_documento d ON dg.id_documento = d.id_documento WHERE d.ds_nome = 'Quarterly Report';",
+    "base_sql": "SELECT g.id_grupo, g.ds_nome \nFROM tb_documento d \nJOIN tb_documento_x_grupo dg ON d.id_documento = dg.id_documento \nJOIN tb_grupo g ON dg.id_grupo = g.id_grupo \nWHERE d.ds_nome = 'Quarterly Report'",
+    "lora_sql": "SELECT g.id_grupo, g.ds_nome FROM tb_documento d JOIN tb_documento_x_grupo dg ON d.id_documento = dg.id_documento JOIN tb_grupo g ON dg.id_grupo = g.id_grupo WHERE d.ds_nome = 'Quarterly Report'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Find the clients who have ordered products with alternative options recorded, and show the number of distinct alternative products linked to their orders.",
+    "gold_sql": "SELECT      ped.fk_cliente,      COUNT(DISTINCT alt.fk_alternativo) AS distinct_alternative_products FROM tb_pedido ped JOIN tb_pedido_produto ped_prod ON ped.id_pedido = ped_prod.fk_pedido JOIN tb_produto_alternativo alt ON ped_prod.fk_produto = alt.fk_original GROUP BY ped.fk_cliente;",
+    "base_sql": "SELECT c.id_cliente, COUNT(DISTINCT palt.fk_alternativo) AS num_alternatives\nFROM tb_cliente c\nJOIN tb_pedido p ON c.id_cliente = p.fk_cliente\nJOIN tb_pedido_produto pp ON p.id_pedido = pp.fk_pedido\nJOIN tb_produto_alternativo palt ON pp.fk_produto = palt.fk_original\nGROUP BY c.id_client",
+    "lora_sql": "SELECT      c.id_cliente,     c.nome,     COUNT(DISTINCT pa.fk_alternativo) AS num_distinct_alternatives FROM tb_cliente c JOIN tb_pedido p ON c.id_cliente = p.fk_cliente JOIN tb_pedido_produto pp ON p.id_pedido = pp.fk_pedido JOIN tb_produto_alternativo pa ON pp.fk_produto = pa.fk_original GROUP BY c.id_cliente, c.nome",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: c.id_client",
+    "base_sd_all_errors": [
+      "no such column: c.id_client",
+      "no such column: c.id_client"
+    ]
+  },
+  {
+    "question": "Which maintenance events had their associated spare parts inventory levels fall below the reorder threshold before the event was completed, and how many units were actually used compared to what was required for each event? Include only events scheduled between 2020 and 2024.",
+    "gold_sql": "SELECT      msr.event_id,     msr.part_id,     msr.required_quantity,     pu.quantity_used FROM maintenance_event me JOIN maintenance_spare_requirement msr ON me.event_id = msr.event_id JOIN spare_part_inventory spi ON msr.part_id = spi.part_id LEFT JOIN part_usage pu ON msr.event_id = pu.event_id AND msr.part_id = pu.part_id WHERE me.scheduled_date BETWEEN '2020-01-01' AND '2024-12-31'   AND spi.quantity < spi.reorder_level   AND me.status = 'Completed';",
+    "base_sql": "SELECT me.event_id, msr.required_quantity, pu.quantity_used, spi.quantity - spi.reorder_level AS inventory_below_threshold\nFROM maintenance_event me\nJOIN maintenance_spare_requirement msr ON me.event_id = msr.event_id\nJOIN part_usage pu ON me.event_id = pu.event_id\nJOIN spare_part_inventory spi ON pu.part_id = spi.part_id\nWHERE me.scheduled_date BETWEEN '2020-01-01' AND '2024-12-31'\nAND spi.quantity < spi.reorder_level",
+    "lora_sql": "WITH required_parts AS (     SELECT          m.event_id,         msr.part_id,         SUM(msr.required_quantity) AS total_required     FROM maintenance_spare_requirement msr     JOIN maintenance_event m ON msr.event_id = m.event_id     WHERE m.scheduled_date BETWEEN '2020-01-01' AND '2024-12-31'     GROUP BY m.event_id, msr.part_id ), actual_parts_used AS (     SELECT          pu.event_id,         pu.part_id,         SUM(pu.quantity_used) AS total_used     FROM part_usage pu     JOIN maintenance_event m ON pu.event_id = m.event_id     WHERE m.scheduled_date BETWEEN '2020-01-01' AND '2024-12-31'     GROUP BY pu.event_id, pu.part_id ), inventory_levels AS (     SELECT          spi.event_id,         spi.location_id,         spi.quantity AS current_inventory,         spi.reorder_level     FROM spare_part_inventory spi     JOIN maintenance_event m ON spi.location_id = m.component_id     WHERE m.scheduled_date BETWEEN '2020-01-01' AND '2024-",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "incomplete input",
+    "lora_sd_all_errors": [
+      "incomplete input",
+      "unrecognized token: \"'2024-\""
+    ]
+  },
+  {
+    "question": "Identify the client(s) with the most recent exercise session, including the exercise name and duration.",
+    "gold_sql": "SELECT cliid, exercise_name, duration_minutes FROM exercise_log WHERE logged_at = (SELECT MAX(logged_at) FROM exercise_log);",
+    "base_sql": "SELECT cliid, exercise_name, duration_minutes FROM exercise_log WHERE logged_at = (SELECT MAX(logged_at) FROM exercise_log)",
+    "lora_sql": "SELECT cliid, exercise_name, duration_minutes FROM exercise_log WHERE logged_at = (     SELECT MAX(logged_at)     FROM exercise_log )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the breakdown of the number of parts made by employees with a salary higher than $70,000 that were used in products ordered by customers with surname 'Lee,' grouped by the WMC associated with the product, the machine used to make the part, the supervisor of that machine, the employee who made the part, and the date of manufacture, sorted by the number of parts in descending order?",
+    "gold_sql": "SELECT      p.product_WMC_name AS wmc_name,     m.machine_name,     sup.employee_Name AS supervisor_name,     e.employee_Name AS made_by_employee,     part.part_manufactureDate,     COUNT(*) AS part_count FROM T_Customer c JOIN T_Orders o ON c.customer_CNo = o.orders_customer_CNo JOIN T_Product p ON o.orders_product_PNo = p.product_PrName JOIN T_Assembles a ON p.product_PrName = a.assembles_product_PNo JOIN T_Part part ON a.assembles_part_PartNo = part.part_PartNo JOIN T_MadeBy mb ON part.part_PartNo = mb.madeby_part_PartNo JOIN T_Employee e ON mb.madeby_employee_ENo = e.employee_ENo JOIN T_MadeOn mo ON part.part_PartNo = mo.madeon_part_PartNo JOIN T_Machine m ON mo.madeon_machine_MNo = m.machine_MNo JOIN T_Supervisor s ON m.machine_MNo = s.supervisor_machine_MNo JOIN T_Employee sup ON s.supervisor_employee_ENo = sup.employee_ENo WHERE e.employee_Salary > 70000   AND c.customer_surname = 'Lee' GROUP BY      p.product_WMC_name,     m.machine_name,     sup.employee_Name,     e.employee_Name,     part.part_manufactureDate ORDER BY part_count DESC;",
+    "base_sql": "```sql\nSELECT \n    p.product_WMC_name, \n    m.machine_name, \n    s.supervisor_employee_ENo, \n    e.employee_Name, \n    p.part_manufactureDate, \n    COUNT(*) AS num_parts\nFROM \n    T_Part p\nJOIN \n    T_MadeBy mb ON p.part_PartNo = mb.madeby_part_PartNo\nJOIN \n    T_Employee e ON mb.madeby_employee_ENo = e.employee_ENo\nJOIN \n    T_Supervisor s ON s.supervisor_machine_MNo = p.madeon_machine_MNo\nJOIN \n    T_MadeOn mo ON p.part_PartNo = mo.madeon_part_PartNo\nJOIN \n    T_Machine m ON mo.madeon_machine_MNo = m.machine_MNo\nJOIN \n    T_Assembles a ON p.part_PartNo = a.assembles_part_PartNo\nJOIN \n    T_Product pr ON a.assembles_product_PNo = pr.product_MNo\nJOIN \n    T_Orders o ON pr.product_MNo = o.orders_product_PNo\nJOIN \n    T_Customer c ON o.orders_customer_CNo = c.customer_CNo\nWHERE \n    e.employee_Salary > 70000 AND c",
+    "lora_sql": "SELECT      p.product_WMC_name AS WMC,     m.machine_name AS machine_used,     s.supervisor_employee_ENo AS supervisor,     e.employee_Name AS employee_made,     p.part_manufactureDate AS manufacture_date,     COUNT(*) AS part_count FROM T_Part p JOIN T_MadeBy mb ON p.part_PartNo = mb.madeby_part_PartNo JOIN T_Employee e ON mb.madeby_employee_ENo = e.employee_ENo JOIN T_Supervisor s ON p.madeon_machine_MNo = s.supervisor_machine_MNo JOIN T_MadeOn mo ON p.part_PartNo = mo.madeon_part_PartNo JOIN T_Machine m ON mo.madeon_machine_MNo = m.machine_MNo JOIN T_Product pr ON mo.madeon_part_PartNo = pr.product_MNo JOIN T_Orders o ON pr.product_MNo = o.orders_product_PNo JOIN T_Customer c ON o.orders_customer_CNo = c.customer_CNo WHERE e.employee_Salary > 70000 AND c.customer_surname = 'Lee' GROUP BY p.product_WMC_name, m.machine_name, s.supervisor_employee_ENo, e.employee_Name, p.part_manufactureDate ORDER BY part_count DESC",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "incomplete input",
+    "base_sd_all_errors": [
+      "incomplete input",
+      "unrecognized token: \"```sql\nSELECT \n    p.product_WMC_name, \n    m.machine_name, \n    s.supervisor_employee_ENo, \n    e.employee_Name, \n    p.part_manufactureDate, \n    COUNT(*) AS num_parts\nFROM \n   "
+    ],
+    "lora_sd_first_error": "no such column: p.product_WMC_name",
+    "lora_sd_all_errors": [
+      "no such column: p.product_WMC_name",
+      "no such column: p.product_WMC_name"
+    ]
+  },
+  {
+    "question": "Determine which users have reported content in groups where they are not a member, considering the most recent moderation action taken by group moderators before the report was filed.",
+    "gold_sql": "SELECT     urc.user_id,     urc.group_id,     urc.reported_at,     MAX(uma.performed_at) AS latest_moderation_before_report FROM     user_reported_content urc LEFT JOIN     user_group ug     ON urc.user_id = ug.user_id     AND urc.group_id = ug.group_id LEFT JOIN     user_moderation_actions uma     ON urc.group_id = uma.group_id     AND uma.performed_at < urc.reported_at WHERE     ug.user_id IS NULL  ;",
+    "base_sql": "SELECT urc.user_id, urc.group_id\nFROM user_reported_content urc\nJOIN user_group ug ON urc.group_id = ug.group_id\nJOIN user_moderation_actions uma ON ug.user_id = uma.user_id AND urc.group_id = uma.group_id\nWHERE ug.user_id != urc.user_id\nORDER BY uma.performed_at DESC",
+    "lora_sql": "WITH latest_moderation AS (     SELECT          user_id,         group_id,         performed_at,         ROW_NUMBER() OVER (PARTITION BY user_id, group_id ORDER BY performed_at DESC) as rn     FROM user_moderation_actions ) SELECT      ur.user_id,     ur.group_id FROM user_reported_content ur JOIN latest_moderation lm ON ur.user_id = lm.user_id AND ur.group_id = lm.group_id WHERE lm.rn = 1   AND ur.user_id NOT IN (SELECT user_id FROM user_group WHERE group_id = ur.group_id)",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 1,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: u.user_id",
+    "base_sd_all_errors": [
+      "no such column: u.user_id"
+    ]
+  },
+  {
+    "question": "For each patient who received a treatment 'Root Canal Therapy', identify the dentist who performed the procedure, the date of the treatment, and the total cost of the treatment, considering only those patients who have an active insurance policy with a coverage percentage above 50%.",
+    "gold_sql": "SELECT      dentalitems.nameDoctor AS dentist_name,     treatments.date AS treatment_date,     treatment_procedures.cost AS total_cost FROM treatments JOIN treatment_procedures ON treatments.idProcedure = treatment_procedures.idProcedure JOIN dentalitems ON treatments.idDental = dentalitems.idDental JOIN user_insurance ON treatments.idUser = user_insurance.idUser JOIN insurance_plans ON user_insurance.idInsurance = insurance_plans.idInsurance JOIN insurance_policies ON user_insurance.policy_number = insurance_policies.policy_number WHERE treatment_procedures.name = 'Root Canal Therapy'     AND insurance_policies.status = 'active'     AND insurance_plans.coverage_percentage > 50;",
+    "base_sql": "SELECT t.idUser, d.nameDoctor, t.date, SUM(tp.cost) AS total_cost\nFROM treatments t\nJOIN treatment_procedures tp ON t.idProcedure = tp.idProcedure\nJOIN dentists d ON t.idDental = d.idDentist\nJOIN user_insurance ui ON t.idUser = ui.idUser\nJOIN insurance_plans ip ON ui.idInsurance = ip.idInsurance\nWHERE tp.name = 'Root Canal Therapy' AND ip.coverage_percentage > 50 AND ui.status = 'active'\nGROUP BY t.idUser, d.idDentist, t.dat",
+    "lora_sql": "SELECT      t.idUser AS patient_id,     d.name AS dentist_name,     t.date AS treatment_date,     tp.cost AS total_cost FROM treatments t JOIN treatment_procedures tp ON t.idProcedure = tp.idProcedure JOIN dentists d ON t.idDental = d.idUser WHERE tp.name = 'Root Canal Therapy'   AND EXISTS (       SELECT 1       FROM user_insurance ui       JOIN insurance_plans ip ON ui.idInsurance = ip.idInsurance       WHERE ui.idUser = t.idUser         AND ip.coverage_percentage > 50   )",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: d.nameDoctor",
+    "base_sd_all_errors": [
+      "no such column: d.nameDoctor",
+      "no such column: d.nameDoctor"
+    ]
+  },
+  {
+    "question": "What is the most common activity_type in mod_ccvm_user_activity_logs among users who have a 'dark_mode' theme set in mod_ccvm_user_themes?",
+    "gold_sql": "SELECT a.activity_type FROM mod_ccvm_user_activity_logs a JOIN mod_ccvm_user_themes t ON a.user_id = t.user_id WHERE t.theme_name = 'dark_mode' GROUP BY a.activity_type ORDER BY COUNT(*) DESC LIMIT 1;",
+    "base_sql": "SELECT activity_type \nFROM mod_ccvm_user_activity_logs \nWHERE user_id IN (\n    SELECT user_id \n    FROM mod_ccvm_user_themes \n    WHERE theme_name = 'dark_mode'\n) \nGROUP BY activity_type \nORDER BY COUNT(*) DESC \nLIMIT 1",
+    "lora_sql": "SELECT activity_type FROM mod_ccvm_user_activity_logs WHERE user_id IN (     SELECT user_id      FROM mod_ccvm_user_themes      WHERE theme_name = 'dark_mode' ) GROUP BY activity_type ORDER BY COUNT(*) DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the total number of students who are members of the \"Science Club\" in the club_memberships table?",
+    "gold_sql": "SELECT COUNT(DISTINCT cm.student_id) FROM club_memberships cm WHERE cm.club_id = (     SELECT sc.id     FROM student_clubs sc     WHERE sc.club_name = 'Science Club'     LIMIT 1 );",
+    "base_sql": "SELECT COUNT(*) FROM club_memberships WHERE club_id = (SELECT id FROM student_clubs WHERE club_name = 'Science Club')",
+    "lora_sql": "SELECT COUNT(*) FROM club_memberships WHERE club_id = (     SELECT id      FROM student_clubs      WHERE club_name = 'Science Club' )",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the organizations that have at least one project with a compliance event of type 'Safety Inspection' in the last six months.",
+    "gold_sql": "SELECT DISTINCT o.Name, o.OrgUrl FROM Organizations o JOIN Projects p ON o.OrgId = p.OrgId JOIN ProjectComplianceEvents c ON p.ProjectId = c.ProjectId WHERE c.EventType = 'Safety Inspection'   AND c.EventDate BETWEEN DATE('now', '-6 months') AND DATE('now');",
+    "base_sql": "SELECT DISTINCT o.Name \nFROM Organizations o\nJOIN Projects p ON o.OrgId = p.OrgId\nJOIN ProjectComplianceEvents pce ON p.ProjectId = pce.ProjectId\nWHERE pce.EventType = 'Safety Inspection'\nAND pce.EventDate >= DATEADD(month, -6, GETDATE())",
+    "lora_sql": "SELECT DISTINCT Organizations.Name FROM Organizations JOIN Projects ON Organizations.OrgId = Projects.OrgId JOIN ProjectComplianceEvents ON Projects.ProjectId = ProjectComplianceEvents.ProjectId WHERE ProjectComplianceEvents.EventType = 'Safety Inspection'   AND ProjectComplianceEvents.EventDate >= date('now', '-6 months')",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: month",
+    "base_sd_all_errors": [
+      "no such column: month",
+      "no such column: MONTH"
+    ]
+  },
+  {
+    "question": "How many customers have a data package purchase with a validity period longer than 90 days and a purchase date in the last 5 months?",
+    "gold_sql": "SELECT COUNT(DISTINCT dpp.customer_username) FROM data_package dp JOIN data_package_purchase dpp ON dp.package_id = dpp.package_id WHERE dp.validity_days > 90   AND dpp.purchase_date >= DATE('now', '-5 months');",
+    "base_sql": "SELECT COUNT(DISTINCT customer_username) \nFROM data_package_purchase \nWHERE expiry_date > CURRENT_DATE() + INTERVAL 90 DAY AND purchase_date >= CURRENT_DATE() - INTERVAL 5 MONTH",
+    "lora_sql": "SELECT COUNT(DISTINCT dp.customer_username) FROM data_package_purchase dp JOIN data_package d ON dp.package_id = d.package_id WHERE d.validity_days > 90   AND dp.purchase_date >= DATE('now', '-5 months')",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such function: CURDATE",
+    "base_sd_all_errors": [
+      "no such function: CURDATE",
+      "near \"(\": syntax error"
+    ]
+  },
+  {
+    "question": "What is the average rating of all products that have at least 5 reviews, grouped by the product's vendor?",
+    "gold_sql": "SELECT      v.id AS vendor_id,     v.name AS vendor_name,     AVG(r.rating) AS average_rating FROM      c4_product_review r JOIN cart4j_product_c4_product p ON r.product_id = p.id JOIN c4_vendor v ON p.vendor_id = v.id GROUP BY      v.id, v.name HAVING      COUNT(r.id) >= 5;",
+    "base_sql": "SELECT v.name, AVG(pr.rating) AS average_rating\nFROM cart4j_product_c4_product p\nJOIN c4_product_review pr ON p.id = pr.product_id\nJOIN c4_vendor v ON p.vendor_id = v.id\nGROUP BY v.name\nHAVING COUNT(pr.id) >= 5",
+    "lora_sql": "SELECT      v.name AS vendor_name,     AVG(pr.rating) AS average_rating FROM      c4_product_review pr JOIN      cart4j_product_c4_product p ON pr.product_id = p.id JOIN      c4_vendor v ON p.vendor_id = v.id GROUP BY      v.id HAVING      COUNT(*) >= 5",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 1,
+    "lora_retries": 1,
+    "base_sd_first_error": "no such table: c4_product",
+    "base_sd_all_errors": [
+      "no such table: c4_product"
+    ],
+    "lora_sd_first_error": "no such table: c4_product",
+    "lora_sd_all_errors": [
+      "no such table: c4_product"
+    ]
+  },
+  {
+    "question": "How many refresh tokens have been utilized within the past week based on historical records?",
+    "gold_sql": "SELECT COUNT(*)  FROM refresh_token_history  WHERE used_at >= datetime('now', '-7 days');",
+    "base_sql": "SELECT COUNT(*) FROM refresh_token_history WHERE used_at >= NOW() - INTERVAL '7' DAY",
+    "lora_sql": "SELECT COUNT(*) FROM refresh_token_history WHERE used_at >= datetime('now', '-7 days')",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"'1 week'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'1 week'\": syntax error",
+      "near \"'7 days'\": syntax error"
+    ]
+  },
+  {
+    "question": "Compile a detailed report that includes the titles and images of all registered items, the number of times each has been viewed, the average rating given by users, and the bios of the top three reviewers for each item. Include only items that have at least one saved entry and have been purchased within the last 12 months.",
+    "gold_sql": "WITH ranked_reviewers AS (     SELECT         a.registro_id,         a.user_id,         AVG(a.nota) AS avg_rating,         ROW_NUMBER() OVER (PARTITION BY a.registro_id ORDER BY AVG(a.nota) DESC) AS rn     FROM avaliacoes_registro a     GROUP BY a.registro_id, a.user_id ) SELECT     r.titulo,     GROUP_CONCAT(i.url_imagem) AS images,     COUNT(v.id) AS view_count,     ROUND(AVG(a.nota), 2) AS average_rating,     GROUP_CONCAT(u.bio) AS top_reviewers_bios FROM registros r JOIN imagem_registro i ON r.id = i.registro_id LEFT JOIN registro_views v ON r.id = v.registro_id LEFT JOIN avaliacoes_registro a ON r.id = a.registro_id LEFT JOIN ranked_reviewers rr ON r.id = rr.registro_id AND rr.rn <= 3 LEFT JOIN usuario_profile u ON rr.user_id = u.user_id WHERE EXISTS (         SELECT 1         FROM usuario_salvos s         WHERE s.registro_id = r.id     )     AND EXISTS (         SELECT 1         FROM pedidos p         JOIN carrinho_itens ci ON p.cart_id = ci.cart_id         JOIN pagamento pa ON p.id = pa.pedido_id         WHERE pa.status = 'completed'             AND ci.produto_id = r.id             AND p.data_pedido >= date('now', '-12 months')     ) GROUP BY r.id, r.titulo ORDER BY r.id;",
+    "base_sql": "SELECT r.titulo, r.imagens, COUNT(rv.user_id) AS num_views, AVG(ar.nota) AS avg_rating, GROUP_CONCAT(DISTINCT up.bio ORDER BY ar.nota DESC LIMIT 3) AS top_reviewers\nFROM registros r\nJOIN registro_views rv ON r.id = rv.registro_id\nJOIN avaliacoes_registro ar ON r.id = ar.registro_id\nJOIN usuarios_registro ur ON ar.user_id = ur.id\nJOIN usuario_profile up ON ur.id = up.user_id\nJOIN usuario_salvos us ON r.id = us.registro_id\nJOIN pedidos p ON r.id = p.cart_id\nWHERE p.data_pedido >= DATE_SUB(CURRENT_DATE, INTERVAL 1 YEAR)\nGROUP BY r.id\nHAVING COUNT(rv.user_id) > 0 AND COUNT(us.id) > 0\nORDER BY r.",
+    "lora_sql": "WITH TopReviewers AS (     SELECT          r.id AS registro_id,         u.bio,         ROW_NUMBER() OVER (PARTITION BY r.id ORDER BY COUNT(*) DESC) AS rn     FROM registros r     JOIN avaliacoes_registro a ON r.id = a.registro_id     JOIN usuarios_registro u ON a.user_id = u.id     WHERE r.id IN (SELECT DISTINCT registro_id FROM usuario_salvos)       AND r.id IN (SELECT DISTINCT cart_id FROM pedidos WHERE data_pedido >= date('now', '-1 year'))     GROUP BY r.id, u.id ) SELECT      r.titulo,     r.imagens,     COALESCE(SUM(rv.view_count), 0) AS total_views,     AVG(a.nota) AS avg_rating,     GROUP_CONCAT(CASE WHEN tr.rn <= 3 THEN tr.bio END, ', ') AS top_reviewers_bio FROM registros r LEFT JOIN (     SELECT registro_id, COUNT(*) AS view_count     FROM registro_views     GROUP BY registro_id ) rv ON r.id = rv.registro_id LEFT JOIN avaliacoes_registro a ON r.id = a.registro_id LEFT JOIN usuario_salvos us ON r.id = us.registro_id LEFT JOIN usuario_following uf ON r.id = uf",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "near \"LIMIT\": syntax error",
+    "base_sd_all_errors": [
+      "near \"LIMIT\": syntax error",
+      "near \"LIMIT\": syntax error"
+    ],
+    "lora_sd_first_error": "no such column: tr.rn",
+    "lora_sd_all_errors": [
+      "no such column: tr.rn",
+      "no such column: tr.rn"
+    ]
+  },
+  {
+    "question": "Provide a list of customers who have placed orders with a total amount exceeding $400 and have received shipments with tracking numbers containing the word \"Overnight\". Include the customer's name, the order date, the total amount, and the shipment date.",
+    "gold_sql": "SELECT c.customerName, o.orderDate, o.orderTotal, s.shipmentDate FROM Customer c JOIN Orders o ON c.customerID = o.customerID JOIN Shipment s ON o.orderNo = s.orderNo WHERE o.orderTotal > 400 AND s.trackingNumber LIKE '%Overnight%';",
+    "base_sql": "SELECT C.customerName, O.orderDate, O.orderTotal, S.shipmentDate \nFROM Customer C \nJOIN Orders O ON C.customerID = O.customerID \nJOIN Shipment S ON O.orderNo = S.orderNo \nWHERE O.orderTotal > 400 AND S.trackingNumber LIKE '%Overnight%'",
+    "lora_sql": "SELECT c.customerName, o.orderDate, o.orderTotal, s.shipmentDate FROM Customer c JOIN Orders o ON c.customerID = o.customerID JOIN Shipment s ON o.orderNo = s.orderNo WHERE o.orderTotal > 400   AND s.trackingNumber LIKE '%Overnight%'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which customer has made the highest total payments in the system, and what is the total amount paid?",
+    "gold_sql": "SELECT kd_customer, SUM(jumlah_pembayaran) AS total_amount FROM m_pembayaran_customer GROUP BY kd_customer ORDER BY total_amount DESC LIMIT 1;",
+    "base_sql": "SELECT m_customer.kd_customer, SUM(m_pembayaran_customer.jumlah_pembayaran) AS total_payment \nFROM m_customer \nJOIN m_pembayaran_customer ON m_customer.kd_customer = m_pembayaran_customer.kd_customer \nGROUP BY m_customer.kd_customer \nORDER BY total_payment DESC \nLIMIT 1",
+    "lora_sql": "SELECT      c.nama_customer,     SUM(p.jumlah_pembayaran) AS total_pembayaran FROM      m_customer c JOIN      m_pembayaran_customer p ON c.kd_customer = p.kd_customer GROUP BY      c.kd_customer ORDER BY      total_pembayaran DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the number of unique users who have both reported content in the last 30 days and customized their notification preferences, grouped by the most common reason for their reports.",
+    "gold_sql": "WITH reported_users AS (SELECT user_id, reason FROM user_reported_content WHERE created_at >= DATE('now', '-30 days') ), users_with_prefs AS (SELECT DISTINCT user_id FROM notification_preferences ) SELECT r.reason, COUNT(DISTINCT r.user_id) as unique_users FROM reported_users r WHERE r.user_id IN (SELECT user_id FROM users_with_prefs) GROUP BY r.reason ORDER BY unique_users DESC;",
+    "base_sql": "SELECT t1.reason, COUNT(DISTINCT t1.user_id) AS unique_users\nFROM user_reported_content AS t1\nJOIN notification_preferences AS t2 ON t1.user_id = t2.user_id\nWHERE t1.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)\nGROUP BY t1.reason\nORDER BY unique_users DESC",
+    "lora_sql": "WITH recent_reports AS (     SELECT          user_id,         reason     FROM user_reported_content     WHERE created_at >= datetime('now', '-30 days') ), notification_preferences AS (     SELECT          user_id     FROM user_notification_preferences ) SELECT      rr.reason,     COUNT(DISTINCT rr.user_id) AS unique_users_count FROM recent_reports rr JOIN notification_preferences np ON rr.user_id = np.user_id GROUP BY rr.reason ORDER BY unique_users_count DESC",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "near \"30\": syntax error",
+    "base_sd_all_errors": [
+      "near \"30\": syntax error",
+      "near \"30\": syntax error"
+    ],
+    "lora_sd_first_error": "no such table: user_notification_preferences",
+    "lora_sd_all_errors": [
+      "no such table: user_notification_preferences",
+      "no such table: user_notification_preferences"
+    ]
+  },
+  {
+    "question": "Show the total number of file conversions initiated but not completed yet.",
+    "gold_sql": "SELECT COUNT(*) AS total_pending_or_in_progress FROM oss_file_conversion WHERE status IN (0, 1);",
+    "base_sql": "SELECT COUNT(*) FROM oss_file_conversion WHERE status = 0",
+    "lora_sql": "SELECT COUNT(*) FROM oss_file_conversion WHERE status = 0",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the first and last names of employees who received payments of $5000 or more in the batch with ID 'BATCH123'.",
+    "gold_sql": "SELECT E.FIRSTNAME, E.LASTNAME FROM EMPLOYEE E JOIN PAYROLLITEM P ON E.ID = P.EMPLOYEEID WHERE P.BATCHID = 'BATCH123'   AND CAST(NULLIF(P.PAYMENTAMOUNT, '') AS REAL) >= 5000;",
+    "base_sql": "SELECT E.FIRSTNAME, E.LASTNAME FROM EMPLOYEE E JOIN PAYROLLITEM PI ON E.ID = PI.EMPLOYEEID JOIN BATCH B ON PI.BATCHID = B.ID WHERE PI.PAYMENTAMOUNT >= '5000' AND B.ID = 'BATCH123'",
+    "lora_sql": "SELECT E.FIRSTNAME, E.LASTNAME FROM EMPLOYEE E JOIN PAYROLLITEM P ON E.ID = P.EMPLOYEEID WHERE P.PAYMENTAMOUNT >= 5000 AND P.BATCHID = 'BATCH123'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Find all recipes that include the ingredient 'flour' and have at least one user rating above 4, then list each recipe's average rating and the total number of unique users who have attempted it.",
+    "gold_sql": "SELECT      r.recipe_id,     AVG(rr.rating) AS average_rating,     COUNT(DISTINCT rr.user_id) AS unique_users FROM      recipes r JOIN      recipe_ingredients ri ON r.recipe_id = ri.recipe_id JOIN      recipe_ratings rr ON r.recipe_id = rr.recipe_id WHERE      ri.ingredient_name = 'flour'     AND r.recipe_id IN (         SELECT DISTINCT recipe_id         FROM recipe_ratings         WHERE rating > 4     ) GROUP BY      r.recipe_id;",
+    "base_sql": "SELECT r.recipe_name, AVG(rr.rating) AS avg_rating, COUNT(DISTINCT s.user_id) AS unique_users \nFROM recipes r \nJOIN recipe_ingredients ri ON r.recipe_id = ri.recipe_id \nJOIN recipe_ratings rr ON r.recipe_id = rr.recipe_id \nJOIN scenario_attempts s ON r.recipe_id = s.scenario_id \nWHERE ri.ingredient_name = 'flour' AND rr.rating > 4 \nGROUP BY r.recipe_name",
+    "lora_sql": "SELECT      r.recipe_id,     AVG(rr.rating) AS average_rating,     COUNT(DISTINCT s.user_id) AS unique_users FROM      recipe_ingredients ri JOIN      recipe_ratings rr ON ri.recipe_id = rr.recipe_id JOIN      scenarios s ON ri.recipe_id = s.recipe_id JOIN      scenario_attempts sa ON s.scenario_id = sa.scenario_id JOIN      recipe_ingredients ri2 ON sa.recipe_id = ri2.recipe_id JOIN      recipe_ingredients ri3 ON ri2.recipe_id = ri3.recipe_id JOIN      ingredients i ON ri3.ingredient_id = i.ingredient_id WHERE      i.ingredient_name = 'flour'      AND rr.rating > 4 GROUP BY      r.recipe_id",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such table: ingredients",
+    "lora_sd_all_errors": [
+      "no such table: ingredients",
+      "no such table: ingredients"
+    ]
+  },
+  {
+    "question": "What is the total value of products returned in completed order returns that were processed after the corresponding shipments were marked as delivered?",
+    "gold_sql": "SELECT SUM(p.price * ri.quantity) AS total_value FROM order_returns AS ors JOIN return_items AS ri ON ors.id = ri.return_id JOIN products AS p ON ri.product_id = p.id JOIN shipments AS s ON ors.order_id = s.order_id WHERE ors.status = 'completed'   AND s.status = 'delivered'   AND ors.processed_at > s.shipment_date;",
+    "base_sql": "SELECT SUM(op.quantity * p.price) AS total_returned_value\nFROM order_products op\nJOIN products p ON op.product_id = p.id\nJOIN order_returns or_ ON op.order_id = or_.order_id\nJOIN shipments s ON op.order_id = s.order_id\nWHERE or_.status = 'completed' AND s.status = 'delivered' AND or_.processed_at > s.shipment_dat",
+    "lora_sql": "SELECT SUM(pr.quantity * p.price) AS total_returned_value FROM order_returns or JOIN order_products pr ON or.order_id = pr.order_id JOIN products p ON pr.product_id = p.id WHERE or.status = 'completed'   AND or.processed_at > (     SELECT s.shipment_date     FROM shipments s     WHERE s.order_id = or.order_id       AND s.status = 'delivered'   )",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: s.shipment_dat",
+    "base_sd_all_errors": [
+      "no such column: s.shipment_dat",
+      "no such column: s.shipment_dat"
+    ],
+    "lora_sd_first_error": "near \"or\": syntax error",
+    "lora_sd_all_errors": [
+      "near \"or\": syntax error",
+      "near \"or\": syntax error"
+    ]
+  },
+  {
+    "question": "List the IDs of cards that have a validity date that has not yet arrived and a card number greater than 9000000000.",
+    "gold_sql": "SELECT ID_cartao FROM cartao WHERE date(anoValidade, mesValidade, 1) > date('now') AND numero > 9000000000;",
+    "base_sql": "SELECT ID_cartao FROM cartao WHERE (anoValidade > YEAR(CURRENT_DATE()) OR (anoValidade = YEAR(CURRENT_DATE()) AND mesValidade > MONTH(CURRENT_DATE()))) AND numero > 9000000000",
+    "lora_sql": "SELECT ID_cartao FROM cartao WHERE numero > 9000000000 AND (mesValidade > strftime('%m', 'now') OR (mesValidade = strftime('%m', 'now') AND anoValidade >= strftime('%Y', 'now')))",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such function: CURDATE",
+    "base_sd_all_errors": [
+      "no such function: CURDATE",
+      "near \"(\": syntax error"
+    ]
+  },
+  {
+    "question": "Find the top three most delayed flights (by total delay minutes) that have at least one crew member with a license number starting with 'C' and are scheduled on an aircraft manufactured by Boeing.",
+    "gold_sql": "SELECT fd.schedule_id, SUM(fd.delay_minutes) AS total_delay FROM flight_delay fd JOIN aircraft_assignment aa ON fd.schedule_id = aa.schedule_id JOIN aircraft a ON aa.aircraft_id = a.aircraft_id WHERE a.manufacturer = 'Boeing'   AND fd.schedule_id IN (       SELECT DISTINCT ca.schedule_id       FROM crew_assignment ca       JOIN crew c ON ca.crew_id = c.crew_id       WHERE c.license_number LIKE 'C%'   ) GROUP BY fd.schedule_id ORDER BY total_delay DESC LIMIT 3;",
+    "base_sql": "SELECT fs.flight_code, SUM(fd.delay_minutes) AS total_delay\nFROM flight_schedule fs\nJOIN flight_delay fd ON fs.schedule_id = fd.schedule_id\nJOIN crew_assignment ca ON fs.schedule_id = ca.schedule_id\nJOIN crew c ON ca.crew_id = c.crew_id\nJOIN aircraft_assignment aa ON fs.schedule_id = aa.schedule_id\nJOIN aircraft a ON aa.aircraft_id = a.aircraft_id\nJOIN aircraft_manufacturer am ON a.manufacturer = am.manufacturer_name\nWHERE c.license_number LIKE 'C%' AND am.manufacturer_name = 'Boeing'\nGROUP BY fs.flight_code\nORDER BY total_delay DESC\nLIMIT 3",
+    "lora_sql": "SELECT      f.flight_code,     SUM(fd.delay_minutes) AS total_delay FROM      flight f JOIN      flight_schedule fs ON f.flight_code = fs.flight_code JOIN      flight_delay fd ON fs.schedule_id = fd.schedule_id JOIN      aircraft_assignment aa ON f.flight_code = aa.schedule_id JOIN      aircraft a ON aa.aircraft_id = a.aircraft_id JOIN      crew c ON f.flight_code = c.schedule_id WHERE      a.manufacturer = 'Boeing'     AND c.role LIKE 'C%' GROUP BY      f.flight_code ORDER BY      total_delay DESC LIMIT 3",
+    "base_valid": true,
+    "lora_valid": false,
+    "base_retries": 0,
+    "lora_retries": 2,
+    "lora_sd_first_error": "no such column: c.schedule_id",
+    "lora_sd_all_errors": [
+      "no such column: c.schedule_id",
+      "no such column: c.schedule_id"
+    ]
+  },
+  {
+    "question": "Okay, let's see. The user wants me to generate 5 diverse SQL questions that each require exactly 8 joins. The schema provided is pretty extensive with tables like missing_report, pet, spotted_report, user, address, etc.",
+    "gold_sql": "SELECT      m.id AS missing_report_id,      p.name AS pet_name,      pr.issue AS health_issue,      pt.description AS tag_description,      rc.content AS comment_content,      msg.content AS message_content,      u_sender.username AS sender,      u_recipient.username AS recipient FROM missing_report m JOIN pet p ON m.pet_id = p.id JOIN pet_health_record pr ON p.id = pr.pet_id JOIN pet_tag pt ON p.id = pt.pet_id JOIN report_comment rc ON m.id = rc.missing_report_id JOIN message msg ON m.id = msg.report_id JOIN user u_sender ON msg.sender_id = u_sender.id JOIN user u_recipient ON msg.recipient_id = u_recipient.id;",
+    "base_sql": "SELECT mr.place_of_missing, p.name, sr.place_of_finding, u.username, a.street, sp.name AS species_name, b.name AS breed_name, c.phone_number, i.file_path \nFROM missing_report mr \nJOIN pet p ON mr.pet_id = p.id \nJOIN spotted_report sr ON mr.id = sr.missing_report_id \nJOIN `user` u ON u.id = mr.reported_by \nJOIN `address` a ON u.address_id = a.id \nJOIN `pet_species` sp ON p.species_id = sp.id \nJOIN `pet_breed` b ON p.breed_id = b.id \nJOIN `contact` c ON c.user_id = u.id AND c.primary_contact = TRUE \nJOIN `image` i ON i.id = sr.image_id \nWHERE mr.status = 'active' AND u.role = 'admin' LIMIT 1",
+    "lora_sql": "SELECT      m.id AS missing_report_id,     m.place_of_missing,     m.report_time,     m.status,     p.id AS pet_id,     p.name AS pet_name,     s.id AS spotted_report_id,     s.place_of_finding,     s.time_of_finding,     u.username AS reporter_username,     a.street,     a.city,     a.state,     a.zip_code,     i.id AS image_id,     i.file_path,     i.upload_time,     v.user_id AS volunteer_id,     v.active AS volunteer_active,     v.availability,     r.id AS reward_id,     r.amount,     r.expires_at,     t.tag_number,     t.description AS tag_description,     h.issue,     h.diagnosis_date,     h.treatment,     e.export_type,     e.generated_at,     c.token,     c.expires_at,     com.content AS comment_content,     com.created_at AS comment_created_at,     ev.event_type,     ev.description AS event_description,     ev.occurred_at AS event_occurred_at,     n.message,     n.is_read,     n.created_at AS notification_created_at FROM missing_report m JOIN pet p ON m.pet_id = p.id JOIN spott",
+    "base_valid": false,
+    "lora_valid": false,
+    "base_retries": 2,
+    "lora_retries": 2,
+    "base_sd_first_error": "no such column: mr.reported_by",
+    "base_sd_all_errors": [
+      "no such column: mr.reported_by",
+      "no such column: mr.reported_by"
+    ],
+    "lora_sd_first_error": "incomplete input",
+    "lora_sd_all_errors": [
+      "incomplete input",
+      "no such column: m.id"
+    ]
+  },
+  {
+    "question": "List the names of all products in the 'Electronics' category that are currently not marked as usable.",
+    "gold_sql": "SELECT GOODS_NM FROM RTETNGOODS JOIN RTETNCTGRY ON RTETNGOODS.CTGRY_ID = RTETNCTGRY.CTGRY_ID WHERE RTETNCTGRY.CTGRY_NM = 'Electronics' AND RTETNGOODS.USE_AT = 'N';",
+    "base_sql": "SELECT GOODS_NM FROM RTETNGOODS WHERE CTGRY_ID = 'Electronics' AND USE_AT = 'N'",
+    "lora_sql": "SELECT RTETNGOODS.GOODS_NM FROM RTETNGOODS JOIN RTETNCTGRY ON RTETNGOODS.CTGRY_ID = RTETNCTGRY.CTGRY_ID WHERE RTETNCTGRY.CTGRY_NM = 'Electronics' AND RTETNGOODS.USE_AT = 'N'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 1,
+    "lora_sd_first_error": "no such column: RTETNGOODS.MARKER",
+    "lora_sd_all_errors": [
+      "no such column: RTETNGOODS.MARKER"
+    ]
+  },
+  {
+    "question": "Identify the users whose most recent check-in was in the last 7 days and who have at least one event they are attending soon.",
+    "gold_sql": "SELECT u.id_usuario FROM usuarios u WHERE (     SELECT MAX(checkin_time)     FROM check_ins     WHERE user_id = u.id_usuario ) > datetime('now', '-7 days') AND EXISTS (     SELECT 1     FROM event_attendants ea     JOIN events e ON ea.event_id = e.event_id     WHERE ea.user_id = u.id_usuario     AND e.event_date > datetime('now')     AND ea.rsvp_status = 'attending' );",
+    "base_sql": "SELECT u.id_usuario, u.primeiro_nome, u.sobrenome \nFROM usuarios u\nJOIN check_ins c ON u.id_usuario = c.user_id\nJOIN event_attendants ea ON u.id_usuario = ea.user_id\nWHERE c.checkin_time >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)\nAND ea.rsvp_status IN ('attending', 'maybe')\nGROUP BY u.id_usuario, u.primeiro_nome, u.sobrenome\nHAVING MAX(c.checkin_time) >= DATE_SUB(CURRENT_DATE, INTERVAL 7 DAY)",
+    "lora_sql": "SELECT u.id_usuario FROM usuarios u WHERE EXISTS (     SELECT 1     FROM check_ins ci     WHERE ci.user_id = u.id_usuario       AND ci.checkin_time >= datetime('now', '-7 days') ) AND EXISTS (     SELECT 1     FROM event_attendants ea     JOIN events e ON ea.event_id = e.event_id     WHERE ea.user_id = u.id_usuario       AND ea.rsvp_status = 'attending'       AND e.event_date > datetime('now') )",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"7\": syntax error",
+    "base_sd_all_errors": [
+      "near \"7\": syntax error",
+      "near \"7\": syntax error"
+    ]
+  },
+  {
+    "question": "For each object_type in object_id, determine the number of definitions that have at least one tag with an 'approval_status' attribute of 'approved' and a 'review_date' attribute after '2023-06-01', where the definition's timestamp is within the last year and the definition is marked as the latest version.",
+    "gold_sql": "WITH LatestDefinitions AS (     SELECT          definition_pk,         object_fk     FROM          object_definition     WHERE          object_is_latest = 1         AND object_timestamp >= datetime('now', '-1 year') ), ApprovedTags AS (     SELECT          t.definition_fk     FROM          tag t     JOIN          tag_attr a1 ON t.tag_pk = a1.tag_fk     JOIN          tag_attr a2 ON t.tag_pk = a2.tag_fk     WHERE          a1.attr_name = 'approval_status'          AND a1.attr_value_boolean = 1         AND a2.attr_name = 'review_date'         AND a2.attr_value_date > '2023-06-01'         AND t.tag_is_latest = 1 ) SELECT      oi.object_type,     COUNT(*) AS num_definitions FROM      object_id oi JOIN      LatestDefinitions ld ON oi.object_pk = ld.object_fk JOIN      ApprovedTags at ON ld.definition_pk = at.definition_fk GROUP BY      oi.object_type;",
+    "base_sql": "SELECT \n    oid.object_type,\n    COUNT(od.definition_pk) AS num_definitions\nFROM \n    object_id oid\nJOIN \n    object_definition od ON oid.tenant_id = od.tenant_id AND oid.object_pk = od.object_fk\nJOIN \n    tag t ON od.definition_pk = t.definition_fk\nJOIN \n    tag_attr ta ON t.tag_pk = ta.tag_fk\nWHERE \n    od.object_timestamp >= NOW() - INTERVAL '1 YEAR'\n    AND od.object_is_latest = TRUE\n    AND (ta.attr_name = 'approval_status' AND ta.attr_value_string = 'approved')\n    AND ta.attr_name = 'review_date' AND ta.attr_value_date > '2023-06-01'\nGROUP BY \n    oid.object_type",
+    "lora_sql": "SELECT      oid.object_type,     COUNT(DISTINCT od.definition_pk) AS approved_definitions_count FROM      object_id oid JOIN      object_definition od ON oid.object_pk = od.object_fk JOIN      tag t ON od.definition_pk = t.definition_fk JOIN      tag_attr ta ON t.tag_pk = ta.tag_fk WHERE      oid.tenant_id = od.tenant_id     AND ta.attr_name = 'approval_status'     AND ta.attr_value_string = 'approved'     AND ta.attr_name = 'review_date'     AND ta.attr_value_datetime > '2023-06-01'     AND od.object_timestamp >= date('now', '-1 year')     AND od.object_is_latest = 1 GROUP BY      oid.object_type",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"'1 YEAR'\": syntax error",
+    "base_sd_all_errors": [
+      "near \"'1 YEAR'\": syntax error",
+      "near \"'1 YEAR'\": syntax error"
+    ]
+  },
+  {
+    "question": "List the names of members who have at least one note with a timestamp between '2023-01-01' and '2023-12-31', grouped by their birth month.",
+    "gold_sql": "SELECT t1.Name, strftime('%m', t1.BirthDate) AS BornMonth FROM TABLE_1 t1 JOIN TABLE_37 t37 ON t1.MemberId = t37.RecordId WHERE t37.Timestamp BETWEEN '2023-01-01' AND '2023-12-31' GROUP BY BornMonth, t1.Name;",
+    "base_sql": "SELECT T1.Name, EXTRACT(MONTH FROM T1.BirthDate) AS BirthMonth\nFROM TABLE_1 AS T1\nJOIN TABLE_37 AS T3 ON T1.MemberId = T3.NoteIdRef\nWHERE T3.Timestamp BETWEEN '2023-01-01' AND '2023-12-31'\nGROUP BY T1.Name, EXTRACT(MONTH FROM T1.BirthDate)",
+    "lora_sql": "SELECT      T1.Name,     strftime('%m', T1.BirthDate) AS BirthMonth FROM      TABLE_1 T1 JOIN      TABLE_37 T37 ON T1.MemberId = T37.NoteIdRef WHERE      T37.Timestamp BETWEEN '2023-01-01' AND '2023-12-31' GROUP BY      T1.Name,      BirthMonth",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"FROM\": syntax error",
+    "base_sd_all_errors": [
+      "near \"FROM\": syntax error",
+      "near \"FROM\": syntax error"
+    ]
+  },
+  {
+    "question": "How many webhooks have a configuration name of 'max_retries' set to a value greater than 3?",
+    "gold_sql": "SELECT COUNT(DISTINCT webhookId) FROM Configuration WHERE name = 'max_retries' AND CAST(value AS INTEGER) > 3;",
+    "base_sql": "SELECT COUNT(*) FROM Configuration WHERE name = 'max_retries' AND value > 3",
+    "lora_sql": "SELECT COUNT(DISTINCT c.webhookId) FROM Configuration c WHERE c.name = 'max_retries' AND CAST(c.value AS INTEGER) > 3",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "What are the names of the policies with the highest order index, along with their associated organization names and the count of endpoints they are linked to through API versions?",
+    "gold_sql": "WITH LatestPolicies AS (     SELECT name, created_on     FROM policies     ORDER BY created_on DESC     LIMIT 1 ) SELECT p.name AS policy_name, o.name AS organization_name, COUNT(DISTINCT av.endpoint) AS endpoint_count FROM policies p JOIN api_versions av ON p.entity_id = av.id AND p.entity_version = av.version JOIN api_plans ap ON av.id = ap.api_version_id JOIN plans pl ON ap.plan_id = pl.id JOIN organizations o ON pl.organization_id = o.id WHERE p.name = (SELECT name FROM LatestPolicies) GROUP BY p.name, o.name;",
+    "base_sql": "SELECT p.name, o.name, COUNT(av.id) \nFROM policies p\nJOIN organizations o ON p.organization_id = o.id\nLEFT JOIN api_versions av ON p.entity_id = av.id\nWHERE p.order_index = (\n    SELECT MAX(order_index) \n    FROM policies\n)\nGROUP BY p.name, o.na",
+    "lora_sql": "WITH MaxOrderIndex AS (     SELECT MAX(order_index) AS max_order FROM policies ) SELECT      p.name AS policy_name,     o.name AS organization_name,     COUNT(DISTINCT ep.api_version_id) AS endpoint_count FROM policies p JOIN organizations o ON p.organization_id = o.id LEFT JOIN api_versions av ON p.entity_id = av.api_id AND p.entity_version = av.version LEFT JOIN endpoint_properties ep ON av.id = ep.api_version_id WHERE p.order_index = (SELECT max_order FROM MaxOrderIndex) GROUP BY p.id, o.name",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "no such column: o.na",
+    "base_sd_all_errors": [
+      "no such column: o.na",
+      "no such column: o.na"
+    ]
+  },
+  {
+    "question": "The query joins **compliancecheck**, **tenant**, **complianceissue**, and **activitylog**. This combination allows for the analysis of unresolved compliance issues and their related activity logs. The LEFT JOIN on complianceissue ensures that even checks with no unresolved issues are still included, providing a complete overview of all compliance checks.",
+    "gold_sql": "SELECT      cc.tkey,     cc.checkname,     COUNT(DISTINCT ci.tkey) AS unresolved_issues_count,     COUNT(DISTINCT al.tkey) AS activity_logs_count FROM compliancecheck cc LEFT JOIN complianceissue ci      ON cc.tkey = ci.check_tkey AND ci.resolved = 0 LEFT JOIN activitylog al      ON al.details LIKE '%' || cc.tkey || '%' GROUP BY cc.tkey, cc.checkname;",
+    "base_sql": "```sql\nSELECT cc.checkname, t.tenantid, t.name, ci.description, ci.severity, al.action, al.timestamp\nFROM compliancecheck cc\nJOIN tenant t ON cc.tenant_tkey = t.tkey\nLEFT JOIN complianceissue ci ON cc.tkey = ci.check_tkey AND ci.resolved = 0\nLEFT JOIN activitylog al ON t.tkey = al.user_tkey\nWHERE ci.resolved = 0 OR al.user_tkey IS NOT NULL\n```",
+    "lora_sql": "SELECT      c.checkname,     t.tenantid,     c.lastrun,     c.status,     a.action,     a.timestamp FROM      compliancecheck c JOIN tenant t ON c.tenant_tkey = t.tkey LEFT JOIN complianceissue i ON c.tkey = i.check_tkey AND i.resolved = 0 LEFT JOIN activitylog a ON a.user_tkey = c.tenant_tkey",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 1,
+    "base_sd_first_error": "near \"```sql\nSELECT cc.checkname, t.tenantid, t.name, ci.description, ci.severity, al.action, al.timestamp\nFROM compliancecheck cc\nJOIN tenant t ON cc.tenant_tkey = t.tkey\nLEFT JOIN complianceissue ci",
+    "base_sd_all_errors": [
+      "near \"```sql\nSELECT cc.checkname, t.tenantid, t.name, ci.description, ci.severity, al.action, al.timestamp\nFROM compliancecheck cc\nJOIN tenant t ON cc.tenant_tkey = t.tkey\nLEFT JOIN complianceissue ci",
+      "near \"```sql\nSELECT cc.checkname, t.tenantid, t.name, ci.description, ci.severity, al.action, al.timestamp\nFROM compliancecheck cc\nJOIN tenant t ON cc.tenant_tkey = t.tkey\nLEFT JOIN complianceissue ci"
+    ],
+    "lora_sd_first_error": "no such column: a.tenant_tkey",
+    "lora_sd_all_errors": [
+      "no such column: a.tenant_tkey"
+    ]
+  },
+  {
+    "question": "What is the total number of questions in the test with the theme of database design?",
+    "gold_sql": "SELECT COUNT(*)  FROM question  JOIN test ON question.testid = test.id  WHERE test.theme = 'database design';",
+    "base_sql": "SELECT COUNT(*) \nFROM test AS T \nJOIN question AS Q ON Q.testid = T.id \nWHERE T.theme = 'database design'",
+    "lora_sql": "SELECT COUNT(*) FROM question WHERE testid IN (SELECT id FROM test WHERE theme = 'database design')",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_retries": 2,
+    "lora_retries": 0,
+    "base_sd_first_error": "near \"JOIN\": syntax error",
+    "base_sd_all_errors": [
+      "near \"JOIN\": syntax error",
+      "near \"JOIN\": syntax error"
+    ]
+  }
+]
