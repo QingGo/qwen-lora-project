@@ -303,6 +303,62 @@ Expanded to 100 random samples from clean val (seed=42) for statistical signific
 
 N=100 is lower than N=15 (93%→72%) due to harder/more diverse schema complexity in the full val set. LoRA outperforms Base by **13pp** (72% vs 59%). Main LoRA failure modes: column hallucination (18 samples), incomplete input (4), table hallucination (3), syntax error (1). Self-Debug is ineffective against column/table hallucination since error feedback lacks schema info.
 
+### LoRA Weight Change Analysis
+
+Detailed analysis of LoRA adapter weights (L5, r=16, alpha=32, 1800 steps, lr=2e-4 cosine):
+
+**Absolute change (|B@A| element-wise):**
+
+| Statistic | Value |
+|-----------|-------|
+| Total elements | 822M |
+| Mean abs | 0.00054 |
+| Median abs | 0.00040 |
+| Max abs | 0.019 |
+| Near zero (<1e-6) | 0.1% |
+
+**Relative change (|delta|_F / |W|_F):**
+
+| Statistic | Value |
+|-----------|-------|
+| Mean | 4.06% |
+| Median | 3.97% |
+| Range | 2.17% ~ 7.44% |
+
+LoRA modifies ~4% of the original weight magnitude on average — lightweight adaptation.
+
+**By projection type:**
+
+| Projection | \|delta\| mean | Relative change |
+|-----------|:---------:|:---------:|
+| o_proj | 2.7 | **4.66%** ← largest |
+| q_proj | 2.5 | 4.16% |
+| v_proj | 0.9 | 3.78% |
+| k_proj | 0.9 | 3.64% |
+
+Output projection changes most; K/V projections change least — intuitive since output projection determines final token distribution.
+
+**By layer depth:**
+
+| Layer range | \|delta\| mean | Relative change |
+|-------------|:---------:|:---------:|
+| Early (0-4) | 1.80 | 4.18% |
+| Mid (12-16) | 1.57 | **3.73%** ← smallest |
+| Late (23-27) | 2.38 | **5.20%** ← largest |
+
+U-shaped distribution: early and late layers change more, mid layers change less. The top contributor is layer_24/o_proj at ||delta||=4.86 (5.3% of total).
+
+**Theoretical vs Actual:**
+
+Adam optimizer with constant-gradient-sign assumption:
+```
+|Δ|_F(theory) = lr_peak × √(N × T)
+              = 2e-4 × √(10M × 1800) ≈ 26.8
+|Δ|_F(actual) = 21.18  →  ratio 0.79x
+```
+
+The remaining 21% gap is attributed to: (1) cosine schedule reducing average LR below peak, (2) gradient signs not perfectly correlated across steps, (3) weight decay regularization.
+
 ### Training Data Quality: Noise Analysis
 
 A comprehensive scan of all 5 datasets (L1 3K, L2 6K, L4 7.2K, val 300, val_l2 600) identified 3 anomaly categories:
@@ -408,7 +464,21 @@ The `strong_256` vs `strong_1024` control confirms: **256 tokens is sufficient**
 13. **Data scaling + strong prompt → near-perfect quality**: 6K samples + 3072 context + strong system prompt + window function augmentation achieved perfect executability (5.00) and 4.45 logic from DeepSeek judge.
 14. **Training data noise filtering recovers lost performance**: Removing ~0.5% high-impact anomalies (DDL placeholders, instruction fragments, `<Example question>` noise) recovered L4's 87% exec back to 93%. A tiny fraction of bad data has disproportionate impact.
 15. **Self-Debug's limitation is schema comprehension**: Q15 persists across all experiments — the model sees correct schema but writes wrong column/table references. Error feedback loops can fix surface errors (wrong function name) but not deep schema mapping failures.
-16. **Incremental eval saves time**: Adding `--resume` to support interrupted eval runs and `--no_judge` for fast execution-only stats cut eval iteration time from hours to minutes.
+17. **LoRA weight change is lightweight and structured**: Adapter modifies ~4% of base weight magnitude on average. Changes concentrate in o_proj (output projection), with a U-shaped layer distribution (early+late > mid). Adam optimizer drives effective step size ≈ lr, far larger than SGD's lr × gradient. Theoretical random-walk model matches actual within 0.79x.
+
+## Future Directions
+
+**LoRA Text2SQL optimization is paused.** The following directions are identified for future work:
+
+1. **Schema injection**: Annotate prompt with `table.column` prefix + explicit FK relationships. Target: column hallucination (18/28 LoRA failures).
+
+2. **Best-of-N + execution filtering**: Generate 5-10 SQL candidates, select first executable one. Low-cost, probabilistic hit against schema errors.
+
+3. **Negative sample training**: Synthetic corruption (wrong column/table references) targeting schema mapping. Requires careful data construction.
+
+4. **More data + longer context**: 10K+ SQaLe samples with max_length=4096. Marginal gains expected given current scale.
+
+5. **DPO/contrastive learning**: (question, good_sql, model_bad_sql) triples for targeted correction.
 
 ## Evaluation Architecture
 
