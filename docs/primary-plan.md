@@ -10,7 +10,7 @@
   - 记录 loss 曲线、显存占用、训练时间
   - 产出：training log + loss curve 截图
 
-- [ ] **Qwen2.5-7B GGUF Q4_K_M 量化 → llama.cpp 推理**
+- [x] **Qwen2.5-7B GGUF Q4_K_M 量化 → llama.cpp 推理**
   - 把微调好的模型转为 GGUF Q4_K_M
   - 用 llama.cpp server 启动，测首 token 延迟
   - 对比 FP16 和 Q4_K_M 的精度差异（随便问几个问题）

@@ -507,6 +507,33 @@ Qwen2.5-7B-Instruct 原生支持 Hermes 风格的 `<tool_call>` 函数调用，*
 - 支持并行多工具调用（单次回复多个 `<tool_call>` 块）
 - **不需要 LoRA 微调** — Hermes function calling 已内置在 Qwen2.5 的对话模板中
 
+## GGUF 量化（Q4_K_M）
+
+LoRA 合并模型量化为 Q4_K_M，用于 llama.cpp 边缘部署。
+
+| 指标 | FP16 (HF) | Q4_K_M (llama.cpp) |
+|------|:--------:|:-----------------:|
+| 模型大小 | 15.0 GB | **4.4 GB**（3.25x 压缩） |
+| 生成速度 | ~50 t/s (GPU) | ~3.8 t/s (CPU) |
+| TTFT（短问） | ~210ms | ~5000ms (CPU) |
+| 数学 QA 质量 | "2+2 equals 4" | "Four" — 正确 |
+| Text2SQL 质量 | 正确 SQL | 预期同等（长 prompt 在 CPU 上太慢） |
+
+**注意：** llama.cpp 编译时未启用 CUDA —— TTFT 测量为 CPU-only 最差情况。启用 CUDA 后，Q4_K_M 的 TTFT 将与 FP16 相当（~50-100ms）。
+
+**文件：**
+- `deployments/gguf/qwen7b-text2sql-f16.gguf`（15 GB，中间产物）
+- `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf`（4.4 GB，部署用）
+
+**命令：**
+```bash
+# 量化（从 F16 GGUF）
+./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+
+# 推理
+./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
+```
+
 ## 评测架构
 
 ```mermaid

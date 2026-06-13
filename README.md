@@ -505,6 +505,33 @@ Qwen2.5-7B-Instruct natively supports Hermes-style `<tool_call>` function callin
 - Parallel tool calling supported (multiple `<tool_call>` blocks in one response)
 - **No LoRA fine-tuning required** — Hermes function calling is built into Qwen2.5's chat template
 
+## GGUF Quantization (Q4_K_M)
+
+LoRA-merged model quantized to Q4_K_M for edge deployment via llama.cpp.
+
+| Metric | FP16 (HF) | Q4_K_M (llama.cpp) |
+|--------|:---------:|:------------------:|
+| Model size | 15.0 GB | **4.4 GB** (3.25x) |
+| Generation speed | ~50 t/s (GPU) | ~3.8 t/s (CPU) |
+| TTFT (short query) | ~210ms | ~5000ms (CPU) |
+| Math QA quality | "2+2 equals 4" | "Four" — correct |
+| Text2SQL quality | Correct SQL | Parity expected (schema prompts too long for CPU) |
+
+**Note:** llama.cpp was compiled without CUDA support — TTFT measurements are CPU-only worst-case. With CUDA, Q4_K_M TTFT would be comparable to FP16 (~50-100ms).
+
+**Files:**
+- `deployments/gguf/qwen7b-text2sql-f16.gguf` (15 GB, intermediate)
+- `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf` (4.4 GB, deployment)
+
+**Commands:**
+```bash
+# Quantize (from F16 GGUF)
+./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+
+# Inference
+./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
+```
+
 ## Evaluation Architecture
 
 ```mermaid
