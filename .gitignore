@@ -10,30 +10,33 @@ wheels/
 .venv/
 docs/
 models/
-data/
 .env
-outputs/*
 runs/
-!outputs/loss_curve.png
 
-# Training outputs - ignore large checkpoints, keep logs
-outputs_l2/qwen2.5-7b-lora-adapter/
-outputs_l2/checkpoint-*/
-outputs_l2/runs/
+# ====== Outputs: keep logs/evals/reports, ignore large weights/checkpoints ======
+outputs/*/
+!outputs/*/training_logs/
+!outputs/*/evals/
+!outputs/*/reports/
+outputs/*/adapters/**/*.safetensors
+outputs/*/adapters/**/training_args.bin
+outputs/*/adapters/**/tokenizer.json
+outputs/*/adapters/**/tokenizer_config.json
+outputs/*/adapters/checkpoint-*/
+
+# Training data: ignore large train files, keep val
+data/*/train.jsonl
+data/*/train_window.jsonl
+
+# Legacy outputs (pre-migration)
+outputs_l2/
 outputs_l3/
-outputs_l4/qwen2.5-7b-lora-adapter/
-outputs_l4/checkpoint-*/
-outputs_l4/runs/
-outputs_l5/qwen2.5-7b-lora-adapter/
-outputs_l5/checkpoint-*/
-outputs_l5/runs/
+outputs_l4/
+outputs_l5/
 
-# Training data - ignore large train files, keep val
-data_l2/train_strong.jsonl
-data_l2/window_strong.jsonl
-data_l3/train.jsonl
-data_l3/train_window.jsonl
-data_l3/window_samples.jsonl
+# Legacy data (pre-migration)
+data_l2/
+data_l3/
 data_test/
 
 # Scripts

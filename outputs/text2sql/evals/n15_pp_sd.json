@@ -1,0 +1,233 @@
+[
+  {
+    "question": "What is the average value of the flat shipping cost (harga_ongkir_flat) for all records in the tb_pengaturan table?",
+    "gold_sql": "SELECT AVG(harga_ongkir_flat) FROM tb_pengaturan;",
+    "base_sql": "SELECT AVG(CAST(harga_ongkir_flat AS DECIMAL)) AS average_flat_shipping_cost FROM tb_pengatura",
+    "lora_sql": "SELECT AVG(CAST(harga_ongkir_flat AS REAL)) AS average_flat_shipping FROM tb_pengaturan",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 1,
+      "logical_correctness": 1,
+      "conciseness": 1
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "SQL A 完全正确且可执行，而 SQL B 因表名错误无法运行，因此 SQL A 明显更好。",
+    "base_retries": 2,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the difference in average special offer prices between the customer group with the highest number of active offers and the group with the lowest number of active offers, considering only offers valid on the current date?",
+    "gold_sql": "WITH valid_offers AS (     SELECT          customer_group_id,         COUNT(*) AS offer_count,         AVG(price) AS avg_price     FROM oc_product_special     WHERE date_start <= CURRENT_DATE AND date_end >= CURRENT_DATE     GROUP BY customer_group_id ) SELECT      (SELECT avg_price FROM valid_offers WHERE offer_count = (SELECT MAX(offer_count) FROM valid_offers) LIMIT 1)      -      (SELECT avg_price FROM valid_offers WHERE offer_count = (SELECT MIN(offer_count) FROM valid_offers) LIMIT 1) AS price_difference;",
+    "base_sql": "SELECT MAX(avg_price) - MIN(avg_price) AS price_difference \nFROM (\n    SELECT AVG(price) AS avg_price \n    FROM oc_product_special \n    WHERE date_start <= CURRENT_DATE AND (date_end >= CURRENT_DATE OR date_end = '0000-00-00') \n    GROUP BY customer_group_id\n) subquery",
+    "lora_sql": "WITH ActiveOfferCounts AS (     SELECT          customer_group_id,         COUNT(*) AS active_count     FROM          oc_product_special     WHERE          date_start <= CURRENT_DATE AND date_end >= CURRENT_DATE     GROUP BY          customer_group_id ), MaxMinGroups AS (     SELECT          MAX(active_count) AS max_count,         MIN(active_count) AS min_count     FROM          ActiveOfferCounts ) SELECT      (SELECT AVG(price) FROM oc_product_special WHERE date_start <= CURRENT_DATE AND date_end >= CURRENT_DATE AND customer_group_id = (SELECT customer_group_id FROM ActiveOfferCounts WHERE active_count = (SELECT max_count FROM MaxMinGroups))) -     (SELECT AVG(price) FROM oc_product_special WHERE date_start <= CURRENT_DATE AND date_end >= CURRENT_DATE AND customer_group_id = (SELECT customer_group_id FROM ActiveOfferCounts WHERE active_count = (SELECT min_count FROM MaxMinGroups))) AS price_difference",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 1,
+      "conciseness": 3
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 3
+    },
+    "comparison": "SQL B 更好，因为逻辑完全正确，准确回答了问题；SQL A 误解了问题含义，导致结果错误。",
+    "base_retries": 1,
+    "lora_retries": 0
+  },
+  {
+    "question": "What is the difference in average defense between characters in classes with descriptions starting with 'War' and those starting with 'Ass'?",
+    "gold_sql": "SELECT      (SELECT AVG(p.defesa) FROM tb_personagem p JOIN tb_classe c ON p.classe_id = c.id WHERE c.descricao LIKE 'War%')      -      (SELECT AVG(p.defesa) FROM tb_personagem p JOIN tb_classe c ON p.classe_id = c.id WHERE c.descricao LIKE 'Ass%')  AS difference;",
+    "base_sql": "SELECT AVG(CASE WHEN c.descricao LIKE 'War%' THEN p.defesa ELSE NULL END) - AVG(CASE WHEN c.descricao LIKE 'Ass%' THEN p.defesa ELSE NULL END) AS diff_avg_defense\nFROM tb_personagem p\nJOIN tb_classe c ON p.classe_id = c.",
+    "lora_sql": "SELECT      AVG(CASE WHEN c.descricao LIKE 'War%' THEN p.defesa ELSE NULL END) AS avg_war_defense,     AVG(CASE WHEN c.descricao LIKE 'Ass%' THEN p.defesa ELSE NULL END) AS avg_ass_defense,     (AVG(CASE WHEN c.descricao LIKE 'War%' THEN p.defesa ELSE NULL END) -      AVG(CASE WHEN c.descricao LIKE 'Ass%' THEN p.defesa ELSE NULL END)) AS diff FROM tb_personagem p JOIN tb_classe c ON p.classe_id = c.id",
+    "base_valid": false,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 1,
+      "logical_correctness": 1,
+      "conciseness": 1
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 4
+    },
+    "comparison": "SQL B 明显更好：它语法正确、逻辑完整且可执行，而 SQL A 存在语法错误无法运行。",
+    "base_retries": 2,
+    "lora_retries": 0
+  },
+  {
+    "question": "List all reservations that have an end date in the current month and a status of 'cancelled'.",
+    "gold_sql": "SELECT *  FROM reservation  WHERE status = 'cancelled'    AND end_date >= date('now', 'start of month')    AND end_date < date('now', 'start of month', '+1 month');",
+    "base_sql": "SELECT * FROM reservation WHERE end_date LIKE '%-XX-XX' AND status = 'cancelled'",
+    "lora_sql": "SELECT * FROM reservation WHERE strftime('%Y-%m', end_date) = strftime('%Y-%m', 'now') AND status = 'cancelled'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 1,
+      "conciseness": 1
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "SQL A更好，因为它正确实现了查询当前月份且状态为'cancelled'的记录，而SQL B逻辑错误。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "List the names of authors who have written books with an average rating above 4.5.",
+    "gold_sql": "SELECT DISTINCT a.name FROM authors a JOIN book_authors ba ON a.id = ba.author_id JOIN librarytestdb_books lb ON ba.book_id = lb.id WHERE lb.average_rating > 4.5;",
+    "base_sql": "SELECT DISTINCT a.name \nFROM authors a \nJOIN book_authors ba ON a.id = ba.author_id \nJOIN librarytestdb_books b ON ba.book_id = b.id \nWHERE b.average_rating > 4.5",
+    "lora_sql": "SELECT DISTINCT a.name FROM authors a JOIN book_authors ba ON a.id = ba.author_id JOIN librarytestdb_books b ON ba.book_id = b.id WHERE b.average_rating > 4.5",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "两个 SQL 查询完全等价，均完美回答问题，无明显差异。评分一致。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Which user has contributed the most accepted content to the community?",
+    "gold_sql": "SELECT app_user_id, COUNT(*) AS accepted_contributions FROM user_contribution WHERE accepted = 1 GROUP BY app_user_id ORDER BY accepted_contributions DESC LIMIT 1;",
+    "base_sql": "SELECT app_user_id FROM user_contribution WHERE accepted = TRUE GROUP BY app_user_id ORDER BY COUNT(contribution_id) DESC LIMIT 1",
+    "lora_sql": "SELECT app_user_id FROM user_contribution WHERE accepted = 1 GROUP BY app_user_id ORDER BY COUNT(*) DESC LIMIT 1",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 4
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "两个SQL均可正确回答，但SQL B在简洁性上更优，采用标准表达方式，因此整体更好。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Find the earliest updated_at timestamp in the ticket_inventory table for sections with available_tickets greater than 50.",
+    "gold_sql": "SELECT MIN(updated_at)  FROM ticket_inventory  WHERE available_tickets > 50;",
+    "base_sql": "SELECT MIN(updated_at) FROM ticket_inventory WHERE available_tickets > 50",
+    "lora_sql": "SELECT MIN(updated_at) FROM ticket_inventory WHERE available_tickets > 50",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 1,
+      "logical_correctness": 1,
+      "conciseness": 5
+    },
+    "lora_scores": {
+      "executability": 1,
+      "logical_correctness": 1,
+      "conciseness": 5
+    },
+    "comparison": "两个 SQL 完全相同，均因表名不存在于给定 schema 中而不可执行，并且逻辑上无法正确回答问题。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Provide the count of distinct geological samples collected from surveys that have a compliance certificate from the \"National Environmental Agency\".",
+    "gold_sql": "SELECT COUNT(DISTINCT a.id_amostra) FROM amostra_geologica a INNER JOIN certificado_compliance c ON a.id_sondagem = c.id_sondagem WHERE c.nmAgencia = 'National Environmental Agency';",
+    "base_sql": "SELECT COUNT(DISTINCT a.id_amostra) \nFROM amostra_geologica a\nJOIN certificado_compliance c ON a.id_sondagem = c.id_sondagem\nJOIN relatorio_ambiental r ON a.id_sondagem = r.id_sondagem\nWHERE c.nmAgencia = 'National Environmental Agency'",
+    "lora_sql": "SELECT COUNT(DISTINCT a.id_amostra) FROM amostra_geologica a JOIN certificado_compliance c ON a.id_sondagem = c.id_sondagem WHERE c.nmAgencia = 'National Environmental Agency'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 2,
+      "logical_correctness": 2,
+      "conciseness": 2
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "SQL B 更好：它准确回答了问题，没有多余连接，而 SQL A 引入了不必要的表和潜在错误。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "Indicate the titles of tasks that were created after their corresponding user's account creation date.",
+    "gold_sql": "SELECT tasks.title FROM tasks JOIN users ON tasks.user_id = users.id WHERE tasks.created_at > users.created_at;",
+    "base_sql": "SELECT t.title FROM tasks t JOIN users u ON t.user_id = u.id WHERE t.created_at > u.created_at",
+    "lora_sql": "SELECT t.title FROM tasks t JOIN users u ON t.user_id = u.id WHERE t.created_at > u.created_at",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "两个SQL完全相同，均正确、简洁且可执行，因此表现一致。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "How many attachments are tagged with the tag named 'tutorial'?",
+    "gold_sql": "SELECT COUNT(*)  FROM attachments_tags  JOIN tags ON attachments_tags.tag_id = tags.id  WHERE tags.name = 'tutorial';",
+    "base_sql": "SELECT COUNT(*) FROM attachments_tags AS att_tag JOIN tags AS tag ON att_tag.tag_id = tag.id WHERE tag.name = 'tutorial'",
+    "lora_sql": "SELECT COUNT(*) FROM attachments_tags JOIN tags ON attachments_tags.tag_id = tags.id WHERE tags.name = 'tutorial'",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 5,
+      "conciseness": 5
+    },
+    "comparison": "两个 SQL 均正确，但 SQL B 没有使用不必要的别名，更加简洁直接，因此 SQL B 略优。",
+    "base_retries": 0,
+    "lora_retries": 0
+  },
+  {
+    "question": "<Example question 4>",
+    "gold_sql": "SELECT nombre, localidad, tipo_de_obra  FROM tabla_info_obras  WHERE localidad = 'Madrid';",
+    "base_sql": "SELECT * FROM tabla_info_obras WHERE tipo_de_obra = 'example_type' AND localidad = 'example_locality'",
+    "lora_sql": "SELECT * FROM tabla_usuario_sesion",
+    "base_valid": true,
+    "lora_valid": true,
+    "base_scores": {
+      "executability": 5,
+      "logical_correctness": 2,
+      "conciseness": 3
+    },
+    "lora_scores": {
+      "executability": 5,
+      "logical_correctness": 1,
+      "conciseness": 4
+    },
+    "comparison": "SQL A 更好，因为它查询了正确的表，但条件与答案不符；SQL B 完全错误，使用了不相关的表。",
+    "base_retries": 0,
+    "lora_retries": 0
+  }
+]
