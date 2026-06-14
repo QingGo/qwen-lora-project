@@ -34,7 +34,7 @@ graph TD
         DS3["ds_zero3.json"]
     end
 
-    Config -.->|multi-GPU only| Train
+    Config -.->|DS ZeRO-3 multi-GPU only| Train
 ```
 
 ## Sequence: Training & Evaluation Flow
@@ -148,6 +148,39 @@ python scripts/eval_text2sql.py --n_samples 15 --base_prompt_mode strong  # fair
 # Multi-GPU with DeepSpeed:
 # bash scripts/launch_multi.sh 4 2    # 4 GPUs ZeRO-2
 # bash scripts/launch_multi.sh 4 3    # 4 GPUs ZeRO-3
+```
+
+## Training Modes
+
+`train_qwen_lora.py` supports four training modes via flags:
+
+| Mode | Flags | VRAM (7B) | Notes |
+|------|-------|-----------|-------|
+| LoRA (bf16) | *(default)* | ~18 GB | Best quality, standard mode |
+| LoRA + DeepSpeed | `--ds_stage 2` | ~18 GB | Single-GPU compatible |
+| QLoRA (4-bit) | `--qlora` | ~9 GB | 2x VRAM savings, slight quality loss |
+| QLoRA + DeepSpeed | `--qlora --ds_stage 2` | ~9 GB | Max memory savings |
+
+All modes require: `RANK=0 WORLD_SIZE=1 LOCAL_RANK=0 MASTER_ADDR=localhost MASTER_PORT=29500`
+
+```bash
+# LoRA only (default)
+uv run python train_qwen_lora.py --data_path ./data/text2sql/clean/train.jsonl
+
+# LoRA + DeepSpeed ZeRO-2 (single GPU)
+RANK=0 WORLD_SIZE=1 LOCAL_RANK=0 MASTER_ADDR=localhost MASTER_PORT=29500 \
+  uv run python train_qwen_lora.py --data_path ./data/text2sql/clean/train.jsonl --ds_stage 2
+
+# QLoRA (4-bit, saves VRAM)
+uv run python train_qwen_lora.py --data_path ./data/text2sql/clean/train.jsonl --qlora
+
+# QLoRA + DeepSpeed ZeRO-2 (max VRAM savings)
+RANK=0 WORLD_SIZE=1 LOCAL_RANK=0 MASTER_ADDR=localhost MASTER_PORT=29500 \
+  uv run python train_qwen_lora.py --data_path ./data/text2sql/clean/train.jsonl --qlora --ds_stage 2
+
+# DeepSpeed ZeRO-3 (requires 2+ GPUs, OOMs on single)
+# bash scripts/launch_multi.sh 4 3   # 4 GPUs
+# Note: Use --deepspeed_config configs/ds_zero3.json for full config control
 ```
 
 ---
@@ -596,10 +629,11 @@ flowchart TD
 
 ## Dependencies
 
-- Python ≥ 3.12
+- Python >= 3.12
 - PyTorch 2.4+ (CUDA 12.8)
 - transformers, peft, accelerate, datasets, trl
-- deepspeed (optional, multi-GPU)
+- deepspeed + mpi4py (optional, `--ds_stage 2` works on single GPU)
+- bitsandbytes (optional, `--qlora` 4-bit quantization)
 - openai (for LLM-as-Judge)
 - matplotlib, pandas, tensorboard
 

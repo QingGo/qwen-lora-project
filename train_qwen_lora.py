@@ -1,14 +1,16 @@
 import argparse
 import json
 import os
+import tempfile
 import time
 
 import torch
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model, TaskType
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, TaskType
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
+    BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
 )
@@ -42,9 +44,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--deepspeed_config", default=None,
                         help="Path to DeepSpeed config JSON. Omit to skip DeepSpeed.")
 
+    parser.add_argument("--ds_stage", type=int, default=0, choices=[0, 2, 3],
+                        help="Use built-in DeepSpeed ZeRO config (0=disabled). "
+                             "Overridden by --deepspeed_config if both set.")
+
+    parser.add_argument("--qlora", action="store_true",
+                        help="Enable 4-bit QLoRA (requires bitsandbytes, saves VRAM)")
+
     parser.add_argument("--seed", type=int, default=42)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.ds_stage > 0 and args.deepspeed_config is None:
+        ds_config = {
+            "train_batch_size": "auto",
+            "train_micro_batch_size_per_gpu": "auto",
+            "gradient_accumulation_steps": "auto",
+            "zero_optimization": {
+                "stage": args.ds_stage,
+                "overlap_comm": True,
+                "contiguous_gradients": True,
+            },
+            "bf16": {"enabled": True},
+            "gradient_checkpointing": True,
+            "wall_clock_breakdown": False,
+        }
+        fd, config_path = tempfile.mkstemp(suffix=".json", prefix="ds_zero")
+        with os.fdopen(fd, "w") as f:
+            json.dump(ds_config, f, indent=2)
+        args.deepspeed_config = config_path
+        args._ds_config_temp = config_path
+
+    return args
 
 
 def build_lora_config(args: argparse.Namespace) -> LoraConfig:
@@ -141,6 +172,9 @@ def main():
     else:
         strategy = "Single-GPU (no DeepSpeed)"
 
+    if args.qlora:
+        strategy += " + QLoRA (4-bit)"
+
     print(f"=== Training Strategy: {strategy} ===")
     print(f"Model: {args.model_path}")
     print(f"Data: {args.data_path}")
@@ -154,13 +188,30 @@ def main():
     )
     tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_path,
-        torch_dtype=torch.bfloat16,
-        trust_remote_code=True,
-    )
+    if args.qlora:
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_path,
+            quantization_config=quantization_config,
+            trust_remote_code=True,
+        )
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_path,
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True,
+        )
 
     lora_config = build_lora_config(args)
+
+    if args.qlora:
+        model = prepare_model_for_kbit_training(model)
+
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
@@ -203,9 +254,13 @@ def main():
     )
 
     print("\n--- Pre-training evaluation (step 0) ---")
-    eval_result_before = trainer.evaluate()
-    initial_eval_loss = eval_result_before.get("eval_loss", None)
-    print(f"Initial eval_loss: {initial_eval_loss:.4f}" if initial_eval_loss else "Initial eval_loss: N/A")
+    initial_eval_loss = None
+    try:
+        eval_result_before = trainer.evaluate()
+        initial_eval_loss = eval_result_before.get("eval_loss", None)
+        print(f"Initial eval_loss: {initial_eval_loss:.4f}" if initial_eval_loss else "Initial eval_loss: N/A")
+    except Exception as e:
+        print(f"Skipping pre-training eval: {e}")
 
     start = time.time()
     trainer.train()
@@ -250,6 +305,9 @@ def main():
     print(f"LoRA adapter saved to: {args.adapter_dir}")
     print(f"Loss history saved to: {loss_history_path}")
     print(f"Training strategy used: {strategy}")
+
+    if hasattr(args, "_ds_config_temp"):
+        os.unlink(args._ds_config_temp)
 
 
 if __name__ == "__main__":

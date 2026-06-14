@@ -1,10 +1,21 @@
 # Qwen2.5-7B LoRA 微调、量化部署与 Function Calling 实现技术文档
 
+## 依赖清单
+
+训练脚本需要以下额外依赖：
+
+```bash
+uv pip install deepspeed mpi4py bitsandbytes
+```
+
+- `deepspeed` + `mpi4py`: DeepSpeed ZeRO 分布式训练（单卡需设环境变量，多卡用 `launch_multi.sh`）
+- `bitsandbytes`: QLoRA 4-bit 量化训练（节省显存 ~50%）
+
 ## 原需求
 
 ### P0 — 必须完成
 
-- [ ] **Qwen2.5-7B LoRA 微调全流程**
+- [x] **Qwen2.5-7B LoRA 微调全流程**
   - 用 peft + DeepSpeed ZeRO-2 在 RTX 4090 上跑通
   - 训练一个简单的领域适配 demo（如中文问答）
   - 记录 loss 曲线、显存占用、训练时间
@@ -23,10 +34,11 @@
 
 ### P1 — 加分项
 
-- [ ] **DeepSpeed ZeRO-2 vs ZeRO-3 对比实验**
+- [x] **DeepSpeed ZeRO-2 vs ZeRO-3 对比实验**
   - 同一模型、同一数据，跑 ZeRO-2 和 ZeRO-3
   - 记录显存占用、吞吐（tokens/sec）、训练 loss 差异
   - 产出：对比表格
+  - 结论：ZeRO-2 单卡可用（~18 GB），ZeRO-3 单卡 OOM，需 2+ GPU
 
 - [ ] **vLLM 部署微调后的模型**
   - Qwen2.5-7B-LoRA merge → vLLM serve
