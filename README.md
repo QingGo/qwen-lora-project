@@ -529,21 +529,39 @@ LoRA-merged model quantized to Q4_K_M for deployment via llama.cpp (with CUDA GP
 - **Q4_K_M vs BF16**: 2-7x faster, 3.25x smaller, 2.4x less VRAM, zero quality loss.
 - **Q4_K_M is the clear winner** for deployment — best speed, smallest size, lossless quality.
 
-**Files:**
-- `deployments/gguf/qwen7b-text2sql-bf16.gguf` (15 GB, baseline)
-- `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf` (4.4 GB, deployment ready)
-- `deployments/gguf/qwen7b-text2sql-merged/` (HF format, for vLLM)
+### Full Pipeline
 
-**Commands:**
 ```bash
-# HF → BF16 GGUF
-python convert_hf_to_gguf.py merged-model/ --outfile model-bf16.gguf --outtype bf16
+# 1. Merge LoRA adapter into base model
+uv run python scripts/merge_lora.py \
+    --base models/Qwen2.5-7B-Instruct \
+    --adapter outputs/text2sql/adapters/l5-best \
+    --output deployments/gguf/qwen7b-text2sql-merged/
 
-# BF16 GGUF → Q4_K_M
-./llama-quantize model-bf16.gguf model-Q4_K_M.gguf Q4_K_M
+# 2. Build llama.cpp with CUDA (RTX 4090)
+git clone --depth 1 https://github.com/ggerganov/llama.cpp.git && cd llama.cpp
+cmake -B build -G Ninja -DGGML_CUDA=ON
+cmake --build build --target llama-cli llama-quantize -j$(nproc)
 
-# GPU inference (build with CUDA: cmake -B build -G Ninja -DGGML_CUDA=ON)
-./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
+# 3. Convert HF → BF16 GGUF
+python llama.cpp/convert_hf_to_gguf.py ../deployments/gguf/qwen7b-text2sql-merged/ \
+    --outfile ../deployments/gguf/qwen7b-text2sql-bf16.gguf --outtype bf16
+
+# 4. Quantize BF16 GGUF → Q4_K_M
+./build/bin/llama-quantize ../deployments/gguf/qwen7b-text2sql-bf16.gguf \
+    ../deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf Q4_K_M
+
+# 5. GPU inference (single query)
+./build/bin/llama-cli -m ../deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf \
+    -p "prompt" -n 256 --temp 0 -ngl 99 --single-turn --no-conversation
+
+# 6. Start OpenAI-compatible API server
+uv run python scripts/llama_api_server.py
+
+# 7. Test API
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"2+2=?"}],"temperature":0,"max_tokens":50}'
 ```
 
 ## Evaluation Architecture
