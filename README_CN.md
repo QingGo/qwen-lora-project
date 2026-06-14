@@ -509,28 +509,37 @@ Qwen2.5-7B-Instruct 原生支持 Hermes 风格的 `<tool_call>` 函数调用，*
 
 ## GGUF 量化（Q4_K_M）
 
-LoRA 合并模型量化为 Q4_K_M，用于 llama.cpp 边缘部署。
+LoRA 合并模型量化为 Q4_K_M，通过 llama.cpp（CUDA GPU 加速）部署。
 
-| 指标 | FP16 (HF) | Q4_K_M (llama.cpp) |
-|------|:--------:|:-----------------:|
-| 模型大小 | 15.0 GB | **4.4 GB**（3.25x 压缩） |
-| 生成速度 | ~50 t/s (GPU) | ~3.8 t/s (CPU) |
-| TTFT（短问） | ~210ms | ~5000ms (CPU) |
-| 数学 QA 质量 | "2+2 equals 4" | "Four" — 正确 |
-| Text2SQL 质量 | 正确 SQL | 预期同等（长 prompt 在 CPU 上太慢） |
+### GPU 基准测试：F16 GGUF vs Q4_K_M（RTX 4090，CUDA）
 
-**注意：** llama.cpp 编译时未启用 CUDA —— TTFT 测量为 CPU-only 最差情况。启用 CUDA 后，Q4_K_M 的 TTFT 将与 FP16 相当（~50-100ms）。
+| 指标 | F16 GGUF | Q4_K_M GGUF | 对比 |
+|------|:------:|:---------:|:---:|
+| 模型大小 | 15.0 GB | **4.4 GB** | 3.25x 更小 |
+| GPU 显存 | 15.9 GB | **6.6 GB** | 2.4x 更省 |
+| Prompt 速度（短） | 370 t/s | **1,195 t/s** | 3.2x 更快 |
+| Prompt 速度（Text2SQL）| 587 t/s | **1,595-2,657 t/s** | 2.7-4.5x 更快 |
+| 生成速度（短） | 78 t/s | **151 t/s** | 1.9x 更快 |
+| 生成速度（Text2SQL） | 66 t/s | **159-166 t/s** | 2.4-2.5x 更快 |
+| Text2SQL 质量 | `SELECT * FROM users WHERE dept = 'engineering';` | 完全相同 | 无损 |
+| 数学 QA | "Four." | "Four." | 无损 |
+
+**Q4_K_M 在 GPU 上比 F16 更快** — 量化降低内存带宽需求，而 LLM 推理受内存带宽限制。更小的权重 = 更高的吞吐。
 
 **文件：**
 - `deployments/gguf/qwen7b-text2sql-f16.gguf`（15 GB，中间产物）
-- `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf`（4.4 GB，部署用）
+- `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf`（4.4 GB，可直接部署）
+- `deployments/gguf/qwen7b-text2sql-merged/`（HF 格式，供 vLLM 使用）
 
 **命令：**
 ```bash
-# 量化（从 F16 GGUF）
+# HF → F16 GGUF 转换
+python llama.cpp/convert_hf_to_gguf.py merged-model/ --outfile model-f16.gguf --outtype f16
+
+# F16 → Q4_K_M 量化
 ./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
 
-# 推理
+# GPU 推理（需 CUDA 编译：cmake -DGGML_CUDA=ON）
 ./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
 ```
 
