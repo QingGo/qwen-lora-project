@@ -525,7 +525,7 @@ LoRA-merged model quantized to Q4_K_M for deployment via llama.cpp (with CUDA GP
 | Precision | Native BF16 | BF16→F16 converted | Quantized from BF16 |
 
 **Key findings:**
-- **BF16 vs F16**: F16 GGUF is 1.1-1.7x faster than BF16 GGUF on CUDA (FP16 kernels are more optimized). Both are 15GB.
+- **BF16 vs F16**: Both have identical model size (15GB) and GPU VRAM (~15.9GB). Performance comparable on RTX 4090 — FP16 and BF16 both have native Tensor Core support on Ada Lovelace.
 - **Q4_K_M vs BF16**: 2-7x faster, 3.25x smaller, 2.4x less VRAM, zero quality loss.
 - **Q4_K_M is the clear winner** for deployment — best speed, smallest size, lossless quality.
 
