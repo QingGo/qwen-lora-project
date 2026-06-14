@@ -27,8 +27,9 @@ outputs/*/adapters/**/tokenizer.json
 outputs/*/adapters/**/tokenizer_config.json
 outputs/*/adapters/checkpoint-*/
 
-# Training data: ignore large train files, keep val/ref
+# Training data: ignore large train files, keep ref
 data/**/train.jsonl
+data/**/val.jsonl
 data/**/train_window.jsonl
 data/**/window_samples.jsonl
 data/alpaca-gpt4-data-zh/
@@ -51,3 +52,10 @@ uv.lock
 
 # Scripts
 run_l4.sh
+
+# Deployments: keep configs, ignore large weights
+deployments/gguf/*.gguf
+deployments/gguf/*/*.safetensors
+deployments/gguf/*/tokenizer.json
+deployments/gguf/*/*.bin
+
