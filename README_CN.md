@@ -603,33 +603,28 @@ curl http://localhost:8080/v1/chat/completions \
 
 vLLM 提供高吞吐的 OpenAI 兼容 API 服务，支持连续批处理（Continuous Batching）。
 
-### GPU 性能对比：vLLM bf16 vs llama.cpp bf16（RTX 4090）
+### GPU 性能对比：vLLM bf16 vs llama.cpp Q4_K_M（RTX 4090）
 
-二者均运行相同的 bf16 合并模型。同时附 llama.cpp Q4_K_M 作为参考。
+二者均以 OpenAI 兼容 API 服务方式运行。llama-server 使用 slot 并行（本测试 4 slot），vLLM 使用连续批处理（PagedAttention）。
 
-| 指标 | vLLM bf16 | llama.cpp bf16 | llama.cpp Q4_K_M |
-|--------|:-------:|:-------:|:----------:|
-| 模型大小 | 15.0 GB | 15.0 GB | **4.4 GB** |
-| GPU 显存（空闲） | 21.0 GB | **15.9 GB** | 6.6 GB |
-| 显存额外开销 | 6.0 GB | 0.9 GB | 2.2 GB |
-| 单次生成 t/s | 58.9 t/s | **67 t/s** | 167 t/s |
-| 单次延迟 | 0.31s | ~0.5s | ~0.5s |
-| Prompt 处理 t/s | *(已包含)* | 410 t/s | 2,511 t/s |
-| 并发=5 tok/s | 907 t/s | — | — |
-| 并发=10 tok/s | 1,558 t/s | — | — |
-| 并发=20 tok/s | **2,542 t/s** | — | — |
-| 并发=20 req/s | **141 req/s** | — | — |
-| 批处理 | 连续（PagedAttention） | 单请求 | 单请求 |
-| API 接口 | OpenAI 原生 | 自定义包装 | 自定义包装 |
-| 首 token 延迟 | **~0.14s** | ~1-2s | ~4.5s（包装） |
+| 指标 | llama-server Q4_K_M | vLLM bf16 | 说明 |
+|--------|:----------:|:-------:|-------|
+| 模型大小 | **4.4 GB** | 15.0 GB | 小 3.4 倍 |
+| GPU 显存（空闲） | **5.0 GB** | 21.0 GB | 省 4.2 倍 |
+| 单次生成 t/s | **149.6** | 58.9 | 快 2.5 倍 |
+| 单次延迟 | 0.12s | 0.31s | llama 快 2.6 倍 |
+| 并发=5 tok/s | 422 | 907 | vLLM 开始领先 |
+| 并发=10 tok/s | 416 | 1,558 | llama 已饱和 |
+| 并发=20 tok/s | 434 | **2,542** | 差距 5.9 倍 |
+| 最大吞吐 | ~420 tok/s | 2,542+ tok/s | 架构根本差异 |
+| 并发模式 | Slot 并行（4 slot） | 连续批处理 | Slot 满后排队 |
 
 **关键发现：**
-- **单请求**：llama.cpp bf16 生成快 14%（67 vs 59 t/s），省显存 1.3x。vLLM 的 PagedAttention + CUDA 图缓存有 ~6GB 额外开销。
-- **首 token 延迟**：vLLM 比 llama.cpp API 包装快 32 倍 — 原生 PagedAttention 无需每次请求重新加载模型。
-- **显存**：vLLM bf16 占 21GB vs llama.cpp bf16 15.9GB — PagedAttention KV cache 预分配 + torch.compile 缓存。
-- **高并发**：vLLM 连续批处理在 20 并发达到 2,542 tok/s — llama.cpp bf16 无法实现。
-- **Q4_K_M 单用户最优**：167 t/s 生成速度，仅需 6.6GB 显存，但不支持批处理。
-- **适用场景**：vLLM = API 服务（低延迟、高并发），llama.cpp bf16 = 单用户高质量部署，Q4_K_M = 边缘设备部署。
+- **单请求**：llama.cpp Q4_K_M 完胜 — 快 2.5 倍、省 4.2 倍显存。量化推理高度优化。
+- **并发请求**：vLLM 线性扩展，llama-server 封顶 ~420 tok/s。Slot 并行有硬上限。
+- **原因**：llama-server 的 4 个固定 slot 各自串行处理一条请求（prompt → generate）。4 个全忙时新请求排队。vLLM 的 PagedAttention 动态交错所有并发请求的 token，GPU 利用率更高。
+- **取舍**：llama.cpp = 低并发/边缘部署最优（延迟最低、显存最省）。vLLM = 高吞吐 API 服务最优（线性扩展）。
+- **llama-server 确实支持并发** — 只是并发模型不同（slot vs 连续批处理）。4 slot Q4_K_M 在仅 5GB 显存下达到 ~420 tok/s 持续吞吐。
 
 ### 命令
 

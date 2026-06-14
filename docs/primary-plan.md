@@ -48,16 +48,17 @@ uv pip install deepspeed mpi4py bitsandbytes vllm==0.10.2
 
 ## vLLM 实测结果
 
-| 指标 | vLLM bf16 | llama.cpp Q4_K_M |
-|------|:-------:|:----------:|
-| 显存 | 21 GB | 6.6 GB |
-| 单次 gen t/s | 58.9 | 167 |
-| TTFT | 0.14s | 4.5s |
-| 并发=5 tok/s | 907 | — |
-| 并发=10 tok/s | 1,558 | — |
-| 并发=20 tok/s | 2,542 | — |
+llama-server 通过 slot 并行（4 slots）支持并发，vLLM 通过连续批处理（PagedAttention）支持并发。根本差异：
 
-**结论**：vLLM TTFT 快 32x，支持连续批处理（20 并发 2,542 tok/s），适合 API 服务；llama.cpp Q4_K_M 省显存 3.2x，适合边缘部署。两者互补。
+| 指标 | llama-server Q4_K_M | vLLM bf16 |
+|------|:----------:|:-------:|
+| 显存 | 5.0 GB | 21.0 GB |
+| 单次 gen t/s | 149.6 | 58.9 |
+| 并发=5 tok/s | 422 | 907 |
+| 并发=20 tok/s | 434 | 2,542 |
+| 并发模式 | Slot 并行（固定 4 slot） | 连续批处理 |
+
+**结论**：llama-server 在单请求场景最优（2.5x 快，4.2x 省显存）；vLLM 在并发场景最优（连续批处理线性扩展）。llama-server slot 满后排队，吞吐固定 ~420 tok/s；vLLM 20 并发达 2,542 tok/s。两者互补：llama.cpp = 边缘低并发，vLLM = 高吞吐 API。
 
 
 # SQaLe 数据集 + Qwen2.5‑7B‑Instruct Text2SQL LoRA 微调完整技术方案（纯 bf16 版）

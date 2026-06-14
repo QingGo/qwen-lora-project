@@ -601,33 +601,28 @@ curl http://localhost:8080/v1/chat/completions \
 
 vLLM provides a high-throughput OpenAI-compatible API server with continuous batching.
 
-### GPU Benchmark: vLLM bf16 vs llama.cpp bf16 (RTX 4090)
+### GPU Benchmark: vLLM bf16 vs llama.cpp Q4_K_M (RTX 4090)
 
-Both running the same bf16 merged model. Also includes llama.cpp Q4_K_M for reference.
+Both run as OpenAI-compatible servers. llama-server uses slot-based parallelism (4 slots here), vLLM uses continuous batching (PagedAttention).
 
-| Metric | vLLM bf16 | llama.cpp bf16 | llama.cpp Q4_K_M |
-|--------|:-------:|:-------:|:----------:|
-| Model size | 15.0 GB | 15.0 GB | **4.4 GB** |
-| GPU VRAM (idle) | 21.0 GB | **15.9 GB** | 6.6 GB |
-| VRAM overhead | 6.0 GB | 0.9 GB | 2.2 GB |
-| Single gen t/s | 58.9 t/s | **67 t/s** | 167 t/s |
-| Single latency | 0.31s | ~0.5s | ~0.5s |
-| Prompt proc t/s | *(included)* | 410 t/s | 2,511 t/s |
-| Concurrent=5 tok/s | 907 t/s | — | — |
-| Concurrent=10 tok/s | 1,558 t/s | — | — |
-| Concurrent=20 tok/s | **2,542 t/s** | — | — |
-| Concurrent=20 req/s | **141 req/s** | — | — |
-| Batching | Continuous (PagedAttention) | One-at-a-time | One-at-a-time |
-| API | OpenAI native | Custom wrapper | Custom wrapper |
-| TTFT | **~0.14s** | ~1-2s | ~4.5s (wrapper) |
+| Metric | llama-server Q4_K_M | vLLM bf16 | Notes |
+|--------|:----------:|:-------:|-------|
+| Model size | **4.4 GB** | 15.0 GB | 3.4x smaller |
+| GPU VRAM (idle) | **5.0 GB** | 21.0 GB | 4.2x less VRAM |
+| Single gen t/s | **149.6** | 58.9 | 2.5x faster per query |
+| Single latency | 0.12s | 0.31s | llama is 2.6x faster |
+| Concurrent=5 tok/s | 422 | 907 | vLLM pulls ahead |
+| Concurrent=10 tok/s | 416 | 1,558 | llama saturates, vLLM scales |
+| Concurrent=20 tok/s | 434 | **2,542** | 5.9x gap |
+| Max throughput | ~420 tok/s | 2,542+ tok/s | Fundamental architecture difference |
+| Concurrency model | Slot-based (4 slots) | Continuous batching | Slots queue when full |
 
 **Key findings:**
-- **Single request**: llama.cpp bf16 generates 14% faster (67 vs 59 t/s), uses 1.3x less VRAM. vLLM PagedAttention + CUDA graph cache costs ~6GB overhead.
-- **TTFT**: vLLM 32x faster than llama.cpp API wrapper — native PagedAttention eliminates per-request model reload.
-- **VRAM**: vLLM bf16 costs 21GB vs llama.cpp bf16 15.9GB — PagedAttention KV cache pre-allocation + torch.compile cache.
-- **High concurrency**: vLLM's continuous batching scales to 2,542 tok/s at 20 concurrent — impossible with llama.cpp bf16.
-- **Q4_K_M is best for single-user**: 167 t/s generation with 6.6GB VRAM, but no batching support.
-- **Trade-off**: vLLM for API services (TTFT, batching), llama.cpp bf16 for single-user high-quality, Q4_K_M for edge deployment.
+- **Single query**: llama.cpp Q4_K_M wins decisively — 2.5x faster, 4.2x less VRAM. Quantized inference is highly optimized.
+- **Concurrent queries**: vLLM scales linearly while llama-server caps at ~420 tok/s. Slot-based parallelism has a hard limit.
+- **Why**: llama-server has 4 fixed slots — each processes one request at a time (prompt → generate). When all 4 are busy, new requests queue. vLLM's PagedAttention dynamically interleaves tokens from all concurrent requests, maximizing GPU utilization.
+- **Trade-off**: llama.cpp = best latency/VRAM for low-concurrency/edge deployment. vLLM = best for high-throughput API services.
+- **llama-server does support concurrency** — just with a different model (slot vs continuous batching). 4 slots @ Q4_K_M achieves ~420 tok/s sustained throughput with only 5GB VRAM.
 
 ### Commands
 
