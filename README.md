@@ -511,20 +511,23 @@ LoRA-merged model quantized to Q4_K_M for deployment via llama.cpp (with CUDA GP
 
 **Pipeline:** BF16 HF → BF16 GGUF (baseline) → Q4_K_M GGUF (deployment)
 
-### GPU Benchmark: BF16 GGUF vs Q4_K_M (RTX 4090, CUDA)
+### GPU Benchmark: BF16 GGUF vs F16 GGUF vs Q4_K_M (RTX 4090, CUDA)
 
-| Metric | BF16 GGUF | Q4_K_M GGUF | Comparison |
-|--------|:-------:|:----------:|:----------:|
-| Model size | 15.0 GB | **4.4 GB** | 3.25x smaller |
-| GPU VRAM | 15.9 GB | **6.6 GB** | 2.4x less |
-| Prompt speed (short) | 195 t/s | **999 t/s** | 5.1x faster |
-| Prompt speed (Text2SQL) | 361 t/s | **2,511 t/s** | 7.0x faster |
-| Generation speed (short) | 68 t/s | **160 t/s** | 2.3x faster |
-| Generation speed (Text2SQL) | 66 t/s | **167 t/s** | 2.5x faster |
-| Text2SQL quality | `SELECT * FROM users WHERE dept = 'engineering';` | Identical | Lossless |
-| Math QA | Correct | Correct | Lossless |
+| Metric | BF16 GGUF | F16 GGUF | Q4_K_M GGUF |
+|--------|:-------:|:-------:|:----------:|
+| Model size | 15.0 GB | 15.0 GB | **4.4 GB** |
+| GPU VRAM | 15.9 GB | 15.9 GB | **6.6 GB** |
+| Prompt (short) | 223 t/s | 370 t/s | **999 t/s** |
+| Prompt (Text2SQL) | 410 t/s | 587 t/s | **2,511 t/s** |
+| Generation (short) | 68 t/s | 78 t/s | **160 t/s** |
+| Generation (Text2SQL) | 67 t/s | 66 t/s | **167 t/s** |
+| Text2SQL quality | Correct | Correct | Correct (identical) |
+| Precision | Native BF16 | BF16→F16 converted | Quantized from BF16 |
 
-**Q4_K_M is 2-7x faster than BF16 on GPU** — quantization reduces memory bandwidth demand, which is the bottleneck for LLM inference. Smaller weights = higher throughput, with zero quality loss.
+**Key findings:**
+- **BF16 vs F16**: F16 GGUF is 1.1-1.7x faster than BF16 GGUF on CUDA (FP16 kernels are more optimized). Both are 15GB.
+- **Q4_K_M vs BF16**: 2-7x faster, 3.25x smaller, 2.4x less VRAM, zero quality loss.
+- **Q4_K_M is the clear winner** for deployment — best speed, smallest size, lossless quality.
 
 **Files:**
 - `deployments/gguf/qwen7b-text2sql-bf16.gguf` (15 GB, baseline)
