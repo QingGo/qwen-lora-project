@@ -597,6 +597,54 @@ curl http://localhost:8080/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"2+2=?"}],"temperature":0,"max_tokens":50}'
 ```
 
+## vLLM Deployment
+
+vLLM provides a high-throughput OpenAI-compatible API server with continuous batching.
+
+### GPU Benchmark: vLLM bf16 vs llama.cpp bf16 (RTX 4090)
+
+Both running the same bf16 merged model. Also includes llama.cpp Q4_K_M for reference.
+
+| Metric | vLLM bf16 | llama.cpp bf16 | llama.cpp Q4_K_M |
+|--------|:-------:|:-------:|:----------:|
+| Model size | 15.0 GB | 15.0 GB | **4.4 GB** |
+| GPU VRAM (idle) | 21.0 GB | **15.9 GB** | 6.6 GB |
+| VRAM overhead | 6.0 GB | 0.9 GB | 2.2 GB |
+| Single gen t/s | 58.9 t/s | **67 t/s** | 167 t/s |
+| Single latency | 0.31s | ~0.5s | ~0.5s |
+| Prompt proc t/s | *(included)* | 410 t/s | 2,511 t/s |
+| Concurrent=5 tok/s | 907 t/s | — | — |
+| Concurrent=10 tok/s | 1,558 t/s | — | — |
+| Concurrent=20 tok/s | **2,542 t/s** | — | — |
+| Concurrent=20 req/s | **141 req/s** | — | — |
+| Batching | Continuous (PagedAttention) | One-at-a-time | One-at-a-time |
+| API | OpenAI native | Custom wrapper | Custom wrapper |
+| TTFT | **~0.14s** | ~1-2s | ~4.5s (wrapper) |
+
+**Key findings:**
+- **Single request**: llama.cpp bf16 generates 14% faster (67 vs 59 t/s), uses 1.3x less VRAM. vLLM PagedAttention + CUDA graph cache costs ~6GB overhead.
+- **TTFT**: vLLM 32x faster than llama.cpp API wrapper — native PagedAttention eliminates per-request model reload.
+- **VRAM**: vLLM bf16 costs 21GB vs llama.cpp bf16 15.9GB — PagedAttention KV cache pre-allocation + torch.compile cache.
+- **High concurrency**: vLLM's continuous batching scales to 2,542 tok/s at 20 concurrent — impossible with llama.cpp bf16.
+- **Q4_K_M is best for single-user**: 167 t/s generation with 6.6GB VRAM, but no batching support.
+- **Trade-off**: vLLM for API services (TTFT, batching), llama.cpp bf16 for single-user high-quality, Q4_K_M for edge deployment.
+
+### Commands
+
+```bash
+# Install vLLM (CUDA 12 compatible)
+uv pip install vllm==0.10.2
+
+# Start server
+uv run vllm serve ./deployments/gguf/qwen7b-text2sql-merged \
+    --dtype auto --max-model-len 4096 --gpu-memory-utilization 0.85 --port 18000
+
+# Test API
+curl http://localhost:18000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen7b-text2sql","messages":[{"role":"user","content":"SELECT all stadiums"}],"max_tokens":128}'
+```
+
 ## Evaluation Architecture
 
 ```mermaid

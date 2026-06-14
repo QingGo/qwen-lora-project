@@ -599,6 +599,54 @@ curl http://localhost:8080/v1/chat/completions \
   -d '{"messages":[{"role":"user","content":"2+2=?"}],"temperature":0,"max_tokens":50}'
 ```
 
+## vLLM 部署
+
+vLLM 提供高吞吐的 OpenAI 兼容 API 服务，支持连续批处理（Continuous Batching）。
+
+### GPU 性能对比：vLLM bf16 vs llama.cpp bf16（RTX 4090）
+
+二者均运行相同的 bf16 合并模型。同时附 llama.cpp Q4_K_M 作为参考。
+
+| 指标 | vLLM bf16 | llama.cpp bf16 | llama.cpp Q4_K_M |
+|--------|:-------:|:-------:|:----------:|
+| 模型大小 | 15.0 GB | 15.0 GB | **4.4 GB** |
+| GPU 显存（空闲） | 21.0 GB | **15.9 GB** | 6.6 GB |
+| 显存额外开销 | 6.0 GB | 0.9 GB | 2.2 GB |
+| 单次生成 t/s | 58.9 t/s | **67 t/s** | 167 t/s |
+| 单次延迟 | 0.31s | ~0.5s | ~0.5s |
+| Prompt 处理 t/s | *(已包含)* | 410 t/s | 2,511 t/s |
+| 并发=5 tok/s | 907 t/s | — | — |
+| 并发=10 tok/s | 1,558 t/s | — | — |
+| 并发=20 tok/s | **2,542 t/s** | — | — |
+| 并发=20 req/s | **141 req/s** | — | — |
+| 批处理 | 连续（PagedAttention） | 单请求 | 单请求 |
+| API 接口 | OpenAI 原生 | 自定义包装 | 自定义包装 |
+| 首 token 延迟 | **~0.14s** | ~1-2s | ~4.5s（包装） |
+
+**关键发现：**
+- **单请求**：llama.cpp bf16 生成快 14%（67 vs 59 t/s），省显存 1.3x。vLLM 的 PagedAttention + CUDA 图缓存有 ~6GB 额外开销。
+- **首 token 延迟**：vLLM 比 llama.cpp API 包装快 32 倍 — 原生 PagedAttention 无需每次请求重新加载模型。
+- **显存**：vLLM bf16 占 21GB vs llama.cpp bf16 15.9GB — PagedAttention KV cache 预分配 + torch.compile 缓存。
+- **高并发**：vLLM 连续批处理在 20 并发达到 2,542 tok/s — llama.cpp bf16 无法实现。
+- **Q4_K_M 单用户最优**：167 t/s 生成速度，仅需 6.6GB 显存，但不支持批处理。
+- **适用场景**：vLLM = API 服务（低延迟、高并发），llama.cpp bf16 = 单用户高质量部署，Q4_K_M = 边缘设备部署。
+
+### 命令
+
+```bash
+# 安装 vLLM（CUDA 12 兼容）
+uv pip install vllm==0.10.2
+
+# 启动服务
+uv run vllm serve ./deployments/gguf/qwen7b-text2sql-merged \
+    --dtype auto --max-model-len 4096 --gpu-memory-utilization 0.85 --port 18000
+
+# 测试 API
+curl http://localhost:18000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen7b-text2sql","messages":[{"role":"user","content":"查询所有体育馆"}],"max_tokens":128}'
+```
+
 ## 评测架构
 
 ```mermaid

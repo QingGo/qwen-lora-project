@@ -5,11 +5,12 @@
 训练脚本需要以下额外依赖：
 
 ```bash
-uv pip install deepspeed mpi4py bitsandbytes
+uv pip install deepspeed mpi4py bitsandbytes vllm==0.10.2
 ```
 
 - `deepspeed` + `mpi4py`: DeepSpeed ZeRO 分布式训练（单卡需设环境变量，多卡用 `launch_multi.sh`）
 - `bitsandbytes`: QLoRA 4-bit 量化训练（节省显存 ~50%）
+- `vllm==0.10.2`: 高吞吐推理部署（需 CUDA 12，注意 CUDA 13 版与 4090 不兼容）
 
 ## 原需求
 
@@ -40,10 +41,23 @@ uv pip install deepspeed mpi4py bitsandbytes
   - 产出：对比表格
   - 结论：ZeRO-2 单卡可用（~18 GB），ZeRO-3 单卡 OOM，需 2+ GPU
 
-- [ ] **vLLM 部署微调后的模型**
+- [x] **vLLM 部署微调后的模型**
   - Qwen2.5-7B-LoRA merge → vLLM serve
   - 测并发吞吐
   - 产出：benchmark 数据
+
+## vLLM 实测结果
+
+| 指标 | vLLM bf16 | llama.cpp Q4_K_M |
+|------|:-------:|:----------:|
+| 显存 | 21 GB | 6.6 GB |
+| 单次 gen t/s | 58.9 | 167 |
+| TTFT | 0.14s | 4.5s |
+| 并发=5 tok/s | 907 | — |
+| 并发=10 tok/s | 1,558 | — |
+| 并发=20 tok/s | 2,542 | — |
+
+**结论**：vLLM TTFT 快 32x，支持连续批处理（20 并发 2,542 tok/s），适合 API 服务；llama.cpp Q4_K_M 省显存 3.2x，适合边缘部署。两者互补。
 
 
 # SQaLe 数据集 + Qwen2.5‑7B‑Instruct Text2SQL LoRA 微调完整技术方案（纯 bf16 版）
