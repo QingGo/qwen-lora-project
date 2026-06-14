@@ -509,35 +509,37 @@ Qwen2.5-7B-Instruct natively supports Hermes-style `<tool_call>` function callin
 
 LoRA-merged model quantized to Q4_K_M for deployment via llama.cpp (with CUDA GPU offloading).
 
-### GPU Benchmark: F16 GGUF vs Q4_K_M (RTX 4090, CUDA)
+**Pipeline:** BF16 HF → BF16 GGUF (baseline) → Q4_K_M GGUF (deployment)
 
-| Metric | F16 GGUF | Q4_K_M GGUF | Comparison |
+### GPU Benchmark: BF16 GGUF vs Q4_K_M (RTX 4090, CUDA)
+
+| Metric | BF16 GGUF | Q4_K_M GGUF | Comparison |
 |--------|:-------:|:----------:|:----------:|
 | Model size | 15.0 GB | **4.4 GB** | 3.25x smaller |
 | GPU VRAM | 15.9 GB | **6.6 GB** | 2.4x less |
-| Prompt speed (short) | 370 t/s | **1,195 t/s** | 3.2x faster |
-| Prompt speed (Text2SQL) | 587 t/s | **1,595-2,657 t/s** | 2.7-4.5x faster |
-| Generation speed (short) | 78 t/s | **151 t/s** | 1.9x faster |
-| Generation speed (Text2SQL) | 66 t/s | **159-166 t/s** | 2.4-2.5x faster |
+| Prompt speed (short) | 195 t/s | **999 t/s** | 5.1x faster |
+| Prompt speed (Text2SQL) | 361 t/s | **2,511 t/s** | 7.0x faster |
+| Generation speed (short) | 68 t/s | **160 t/s** | 2.3x faster |
+| Generation speed (Text2SQL) | 66 t/s | **167 t/s** | 2.5x faster |
 | Text2SQL quality | `SELECT * FROM users WHERE dept = 'engineering';` | Identical | Lossless |
-| Math QA | "Four." | "Four." | Lossless |
+| Math QA | Correct | Correct | Lossless |
 
-**Q4_K_M is faster than F16 on GPU** — quantization reduces memory bandwidth demand, which is the bottleneck for LLM inference. Smaller weights = higher throughput.
+**Q4_K_M is 2-7x faster than BF16 on GPU** — quantization reduces memory bandwidth demand, which is the bottleneck for LLM inference. Smaller weights = higher throughput, with zero quality loss.
 
 **Files:**
-- `deployments/gguf/qwen7b-text2sql-f16.gguf` (15 GB, intermediate)
+- `deployments/gguf/qwen7b-text2sql-bf16.gguf` (15 GB, baseline)
 - `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf` (4.4 GB, deployment ready)
 - `deployments/gguf/qwen7b-text2sql-merged/` (HF format, for vLLM)
 
 **Commands:**
 ```bash
-# Convert HF → F16 GGUF
-python llama.cpp/convert_hf_to_gguf.py merged-model/ --outfile model-f16.gguf --outtype f16
+# HF → BF16 GGUF
+python convert_hf_to_gguf.py merged-model/ --outfile model-bf16.gguf --outtype bf16
 
-# Quantize F16 → Q4_K_M
-./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+# BF16 GGUF → Q4_K_M
+./llama-quantize model-bf16.gguf model-Q4_K_M.gguf Q4_K_M
 
-# GPU inference (CUDA required: cmake -DGGML_CUDA=ON)
+# GPU inference (build with CUDA: cmake -B build -G Ninja -DGGML_CUDA=ON)
 ./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
 ```
 

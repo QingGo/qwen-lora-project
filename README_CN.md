@@ -511,35 +511,37 @@ Qwen2.5-7B-Instruct 原生支持 Hermes 风格的 `<tool_call>` 函数调用，*
 
 LoRA 合并模型量化为 Q4_K_M，通过 llama.cpp（CUDA GPU 加速）部署。
 
-### GPU 基准测试：F16 GGUF vs Q4_K_M（RTX 4090，CUDA）
+**流程：** BF16 HF → BF16 GGUF（基线） → Q4_K_M GGUF（部署用）
 
-| 指标 | F16 GGUF | Q4_K_M GGUF | 对比 |
+### GPU 基准测试：BF16 GGUF vs Q4_K_M（RTX 4090，CUDA）
+
+| 指标 | BF16 GGUF | Q4_K_M GGUF | 对比 |
 |------|:------:|:---------:|:---:|
 | 模型大小 | 15.0 GB | **4.4 GB** | 3.25x 更小 |
 | GPU 显存 | 15.9 GB | **6.6 GB** | 2.4x 更省 |
-| Prompt 速度（短） | 370 t/s | **1,195 t/s** | 3.2x 更快 |
-| Prompt 速度（Text2SQL）| 587 t/s | **1,595-2,657 t/s** | 2.7-4.5x 更快 |
-| 生成速度（短） | 78 t/s | **151 t/s** | 1.9x 更快 |
-| 生成速度（Text2SQL） | 66 t/s | **159-166 t/s** | 2.4-2.5x 更快 |
+| Prompt 速度（短） | 195 t/s | **999 t/s** | 5.1x 更快 |
+| Prompt 速度（Text2SQL）| 361 t/s | **2,511 t/s** | 7.0x 更快 |
+| 生成速度（短） | 68 t/s | **160 t/s** | 2.3x 更快 |
+| 生成速度（Text2SQL） | 66 t/s | **167 t/s** | 2.5x 更快 |
 | Text2SQL 质量 | `SELECT * FROM users WHERE dept = 'engineering';` | 完全相同 | 无损 |
-| 数学 QA | "Four." | "Four." | 无损 |
+| 数学 QA | 正确 | 正确 | 无损 |
 
-**Q4_K_M 在 GPU 上比 F16 更快** — 量化降低内存带宽需求，而 LLM 推理受内存带宽限制。更小的权重 = 更高的吞吐。
+**Q4_K_M 在 GPU 上比 BF16 快 2-7 倍** — 量化降低内存带宽需求，而 LLM 推理受内存带宽限制。更小的权重 = 更高的吞吐，质量无损。
 
 **文件：**
-- `deployments/gguf/qwen7b-text2sql-f16.gguf`（15 GB，中间产物）
+- `deployments/gguf/qwen7b-text2sql-bf16.gguf`（15 GB，基线）
 - `deployments/gguf/qwen7b-text2sql-Q4_K_M.gguf`（4.4 GB，可直接部署）
 - `deployments/gguf/qwen7b-text2sql-merged/`（HF 格式，供 vLLM 使用）
 
 **命令：**
 ```bash
-# HF → F16 GGUF 转换
-python llama.cpp/convert_hf_to_gguf.py merged-model/ --outfile model-f16.gguf --outtype f16
+# HF → BF16 GGUF 转换
+python convert_hf_to_gguf.py merged-model/ --outfile model-bf16.gguf --outtype bf16
 
-# F16 → Q4_K_M 量化
-./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+# BF16 GGUF → Q4_K_M 量化
+./llama-quantize model-bf16.gguf model-Q4_K_M.gguf Q4_K_M
 
-# GPU 推理（需 CUDA 编译：cmake -DGGML_CUDA=ON）
+# GPU 推理（CUDA 编译：cmake -B build -G Ninja -DGGML_CUDA=ON）
 ./llama-cli -m model-Q4_K_M.gguf -p "prompt" -n 256 --temp 0 -ngl 99
 ```
 
